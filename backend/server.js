@@ -1,7 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const db = require("./db"); // thêm dòng này
+const db = require("./db"); 
 
 const app = express();
 
@@ -14,6 +14,8 @@ db.getConnection()
   .catch(err => console.log("DB Error:", err));
 
 app.use("/api/auth", require("./routes/auth"));
+app.use("/api/products", require("./routes/products"));
+app.use("/api/stock", require("./routes/stock"));
 
 const PORT = process.env.PORT || 3000;
 
