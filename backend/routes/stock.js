@@ -5,7 +5,15 @@ const db = require("../db");
 // IMPORT
 router.post("/import", async (req, res) => {
   const connection = await db.getConnection();
-
+  if (!req.body.product_id || !req.body.quantity) {
+    return res.status(400).json({ message: "ID sản phẩm và số lượng là bắt buộc" });
+  }
+  if (typeof req.body.product_id !== 'number' || typeof req.body.quantity !== 'number') {
+    return res.status(400).json({ message: "ID sản phẩm và số lượng phải là số" });
+  }
+  if (req.body.product_id <= 0 || req.body.quantity <= 0) {
+    return res.status(400).json({ message: "ID sản phẩm và số lượng không được âm" });
+  }
   try {
     const { product_id, quantity } = req.body;
 
@@ -37,6 +45,15 @@ router.post("/import", async (req, res) => {
 router.post("/export", async (req, res) => {
   const connection = await db.getConnection();
 
+  if (!req.body.product_id || !req.body.quantity) {
+    return res.status(400).json({ message: "ID sản phẩm và số lượng là bắt buộc" });
+  }
+  if (typeof req.body.product_id !== 'number' || typeof req.body.quantity !== 'number') {
+    return res.status(400).json({ message: "ID sản phẩm và số lượng phải là số" });
+  }
+  if (req.body.product_id <= 0 || req.body.quantity <= 0) {
+    return res.status(400).json({ message: "ID sản phẩm và số lượng không được âm" });
+  }
   try {
     const { product_id, quantity } = req.body;
 
