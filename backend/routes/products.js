@@ -26,61 +26,44 @@ router.get("/:id", async (req, res) => {
 
 // ADD PRODUCT
 router.post("/", async (req, res) => {
-  const { name, volume, unit, cost_price, sell_price } = req.body;
-
-  // ===== Validate =====
-  if (!name?.trim()) {
-    return res.status(400).json({ message: "Tên sản phẩm là bắt buộc" });
-  }
-
-  if (!Number.isInteger(volume) || volume <= 0) {
-    return res.status(400).json({ message: "Thể tích phải là số nguyên dương" });
-  }
-
-  const allowedUnits = ["chai", "thung", "binh", "lon"];
-  if (!allowedUnits.includes(unit)) {
-    return res.status(400).json({ message: "loại không hợp lệ (chai, thung, binh, lon" });
-  }
-
-  if (cost_price != null && cost_price < 0) {
-    return res.status(400).json({ message: "Giá vốn không được âm" });
-  }
-
-  if (sell_price != null && sell_price < 0) {
-    return res.status(400).json({ message: "Giá bán không được âm" });
-  }
-
   try {
+    const { name, volume, unit, cost_price, sell_price } = req.body;
+
+    const volumeNumber = Number(volume);
+    const costPrice = Number(cost_price ?? 0);
+    const sellPrice = Number(sell_price ?? 0);
+
+    if (!name?.trim())
+      return res.status(400).json({ message: "Tên sản phẩm bắt buộc" });
+
+    if (!Number.isInteger(volumeNumber) || volumeNumber <= 0)
+      return res.status(400).json({ message: "Thể tích phải là số nguyên dương" });
+
+    const allowedUnits = ["chai", "thung", "binh", "lon"];
+    if (!allowedUnits.includes(unit))
+      return res.status(400).json({ message: "Loại không hợp lệ" });
+
+    if (costPrice < 0 || sellPrice < 0)
+      return res.status(400).json({ message: "Giá không được âm" });
+
     const [result] = await db.query(
-      `INSERT INTO products 
-       (name, volume, unit, cost_price, sell_price) 
+      `INSERT INTO products (name, volume, unit, cost_price, sell_price)
        VALUES (?, ?, ?, ?, ?)`,
-      [
-        name.trim(),
-        volume,
-        unit,
-        cost_price ?? 0,
-        sell_price ?? 0
-      ]
+      [name.trim(), volumeNumber, unit, costPrice, sellPrice]
     );
 
-    return res.status(201).json({
+    res.status(201).json({
       message: "Thêm sản phẩm thành công",
       productId: result.insertId
     });
 
   } catch (err) {
-
     if (err.code === "ER_DUP_ENTRY") {
-      return res.status(409).json({
-        message: "Sản phẩm đã tồn tại"
-      });
+      return res.status(409).json({ message: "Sản phẩm đã tồn tại" });
     }
 
-    console.error("Create product error:", err);
-    return res.status(500).json({
-      message: "Internal server error"
-    });
+    console.error(err);
+    res.status(500).json({ message: "Internal server error" });
   }
 });
 
@@ -94,6 +77,8 @@ router.put("/:id", async (req, res) => {
     if (!name || !volume || !unit || !cost_price || !sell_price) {
       return res.status(400).json({ message: "Vui lòng nhập đầy đủ thông tin" });
     }
+
+    
 
     const [result] = await db.query(
       `UPDATE products 
