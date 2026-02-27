@@ -43,6 +43,11 @@ function Sidebar() {
                     Sản phẩm
                 </a>
 
+                <a className="menu-item" href="/stock">
+                    <i className="fa fa-warehouse"></i>
+                    Kho
+                </a>
+
                 <a className="menu-item" href="/reports">
                     <i className="fa fa-file-alt"></i>
                     Báo cáo
