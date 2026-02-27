@@ -5,7 +5,7 @@ const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader)
-    return res.status(401).json({ message: "No token provided" });
+    return res.status(401).json({ message: "Không có token" });
 
   const token = authHeader.split(" ")[1];
 
@@ -14,7 +14,7 @@ const verifyToken = (req, res, next) => {
     req.user = decoded; // gắn user vào request
     next();
   } catch (err) {
-    return res.status(403).json({ message: "Invalid token" });
+    return res.status(403).json({ message: "Token không hợp lệ" });
   }
 };
 
@@ -22,10 +22,17 @@ const verifyToken = (req, res, next) => {
 const checkRole = (role) => {
   return (req, res, next) => {
     if (req.user.role !== role) {
-      return res.status(403).json({ message: "Access denied" });
+      return res.status(403).json({ message: "Bạn không có quyền truy cập" });
     }
     next();
   };
 };
 
-module.exports = { verifyToken, checkRole };
+const requireAdmin = (req, res, next) => {
+  if (req.user.role !== "admin")
+    return res.status(403).json({ message: "Chỉ admin được phép export" });
+
+  next();
+};
+
+module.exports = { verifyToken, checkRole, requireAdmin };
