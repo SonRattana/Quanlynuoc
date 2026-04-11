@@ -14,19 +14,19 @@ function Products() {
     const [page, setPage] = useState(getPageFromURL());
     const [totalPages, setTotalPages] = useState(1);
     const limit = 10;
-    
+
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         params.set("page", page);
         window.history.replaceState({}, "", `?${params}`);
     }, [page]);
-    
+
     const preventNegativeInput = (e) => {
         if (e.key === "-" || e.key === "e") {
             e.preventDefault();
         }
     };
-    
+
     const formatMoney = (value) => {
         return new Intl.NumberFormat("vi-VN", {
             style: "currency",
@@ -318,7 +318,7 @@ function Products() {
                         </div>
                     </form>
                 </div>
-                
+
                 {/* ===== EDIT FORM ===== */}
                 {showEdit && (
                     <>
@@ -411,7 +411,7 @@ function Products() {
                                                     onKeyDown={preventNegativeInput}
                                                 />
                                             </div>
-                                            
+
                                             <div className="mb-3">
                                                 <label className="form-label">Tiền cọc thế chân</label>
                                                 <input
@@ -458,57 +458,58 @@ function Products() {
                 {/* ===== TABLE ===== */}
                 <div className="bg-white shadow-sm p-4">
                     <h5 className="fw-bold mb-3">Quản lý sản phẩm</h5>
-
-                    <table className="table table-hover align-middle">
-                        <thead className="table-light">
-                            <tr>
-                                <th>ID</th>
-                                <th>Tên</th>
-                                <th>Dung tích</th>
-                                <th>Loại</th>
-                                <th>Giá nhập</th>
-                                <th>Giá bán</th>
-                                <th>Tiền cọc thế chân</th>
-                                <th>Số lượng</th>
-                                <th>Hành động</th>
-                            </tr>
-                        </thead>
-
-                        <tbody>
-                            {products.map((p) => (
-                                <tr key={p.id}>
-                                    <td>{p.id}</td>
-                                    <td>{p.name}</td>
-                                    <td>{p.volume >= 1000 ? `${p.volume / 1000} Lít` : `${p.volume} ml`}</td>
-                                    <td>{p.unit}</td>
-                                    <td>{formatMoney(p.cost_price)}</td>
-                                    <td>{formatMoney(p.sell_price)}</td>
-                                    <td>{formatMoney(p.deposit_price)}</td>
-                                    <td>{p.quantity}</td>
-                                    <td>
-                                        <button
-                                            className="btn btn-warning btn-sm me-2"
-                                            onClick={() => handleEdit(p)}
-                                        >
-                                            Edit
-                                        </button>
-
-                                        <button
-                                            className="btn btn-danger btn-sm"
-                                            onClick={() => handleDelete(p.id)}
-                                        >
-                                            Delete
-                                        </button>
-                                    </td>
+                    <div className="table-responsive">
+                        <table className="table table-hover align-middle">
+                            <thead className="table-light">
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Tên</th>
+                                    <th>Dung tích</th>
+                                    <th>Loại</th>
+                                    <th>Giá nhập</th>
+                                    <th>Giá bán</th>
+                                    <th>Tiền cọc thế chân</th>
+                                    <th>Số lượng</th>
+                                    <th>Hành động</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                    
-                    {/* ===== PHÂN TRANG ===== */}
-                    <Pagination page={page} totalPages={totalPages} setPage={setPage} />
+                            </thead>
+
+                            <tbody>
+                                {products.map((p) => (
+                                    <tr key={p.id}>
+                                        <td>{p.id}</td>
+                                        <td>{p.name}</td>
+                                        <td>{p.volume >= 1000 ? `${p.volume / 1000} Lít` : `${p.volume} ml`}</td>
+                                        <td>{p.unit}</td>
+                                        <td>{formatMoney(p.cost_price)}</td>
+                                        <td>{formatMoney(p.sell_price)}</td>
+                                        <td>{formatMoney(p.deposit_price)}</td>
+                                        <td>{p.quantity}</td>
+                                        <td>
+                                            <button
+                                                className="btn btn-warning btn-sm me-2"
+                                                onClick={() => handleEdit(p)}
+                                            >
+                                                Edit
+                                            </button>
+
+                                            <button
+                                                className="btn btn-danger btn-sm"
+                                                onClick={() => handleDelete(p.id)}
+                                            >
+                                                Delete
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+
+                        {/* ===== PHÂN TRANG ===== */}
+                        <Pagination page={page} totalPages={totalPages} setPage={setPage} />
+                    </div>
+                    </div>
                 </div>
-            </div>
         </Layout>
     );
 }
