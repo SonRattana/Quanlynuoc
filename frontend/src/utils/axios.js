@@ -1,7 +1,8 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: "http://192.168.1.129:3000/",
+  baseURL: "https://quanlynuoc-production.up.railway.app",
+  // baseURL: "http://192.168.1.129:3000/",
   // baseURL: "http://localhost:3000/"
 });
 
