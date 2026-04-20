@@ -56,7 +56,7 @@ export default function InvoiceModal({ invoiceId, onClose }) {
                     width: 100% !important;
                     margin: 0 !important;
                     /* ÉP SÁT NỐC (top: 0), CHỈ THỤT LỀ TRÁI/PHẢI 15px */
-                    padding: 0px 15px 0px 15px !important; 
+                    padding: 0px 15px 0px 35px !important; 
                     box-sizing: border-box !important;
                     color: #000 !important;
                     font-family: Arial, sans-serif !important;
