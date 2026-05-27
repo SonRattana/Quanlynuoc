@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { verifyToken } = require("../middleware/authMiddleware");
-
+const { logAction } = require("../utils/logger");
 // Hoàn tiền
 router.post("/refund", verifyToken, async (req, res) => {
     // 1. Nhận thêm biến 'note' từ Frontend gửi lên
@@ -69,6 +69,10 @@ router.post("/refund", verifyToken, async (req, res) => {
         );
 
         await connection.commit();
+        
+       // [CAMERA] Ghi log hoàn tiền
+        await logAction(req, "REFUND_MONEY", "bottle_deposits", result.insertId, null, req.body, `Hoàn tiền cọc: ${totalRefund.toLocaleString()}đ cho khách ID: ${customer_id}`);
+
 
         res.json({
             message: "Hoàn tiền thành công",

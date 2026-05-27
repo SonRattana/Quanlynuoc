@@ -1,7 +1,7 @@
 const router = require("express").Router();
 const db = require("../db");
 const { verifyToken } = require("../middleware/authMiddleware");
-
+const { logAction } = require("../utils/logger");
 router.post("/", verifyToken, async (req, res) => {
     const connection = await db.getConnection();
 
@@ -107,6 +107,17 @@ router.post("/", verifyToken, async (req, res) => {
 
         await connection.commit();
 
+        // [CAMERA] Ghi log thanh toán thành công
+        // Lưu lại danh sách items để sau này biết đơn này gồm những gì
+        await logAction(
+            req,
+            "CREATE_INVOICE",
+            "invoices",
+            invoiceId,
+            null,
+            { items, totalAmount },
+            `Thanh toán hóa đơn #${invoiceId} - Tổng tiền: ${totalAmount.toLocaleString()}đ`
+        );
         res.json({
             message: "Thanh toán thành công",
             invoice_id: invoiceId,

@@ -1,6 +1,7 @@
 const router = require("express").Router();
 const db = require("../db");
 const { verifyToken, checkRole, requireAdmin } = require("../middleware/authMiddleware");
+const { logAction } = require("../utils/logger");
 
 // ================= LẤY DANH SÁCH KHO (MỚI) =================
 router.get("/warehouses", verifyToken, async (req, res) => {
@@ -97,6 +98,9 @@ router.post("/import", verifyToken, async (req, res) => {
             [product_id, warehouse_id, quantity, reason || "Nhập kho"]
         );
 
+        // 4. Ghi log vào bảng logs
+        await logAction(connection, req.user.id, "import", "Nhập kho", { product_id, warehouse_id, quantity, reason });
+
         await connection.commit();
         res.json({ message: "Nhập kho thành công" });
     } catch (err) {
@@ -106,6 +110,31 @@ router.post("/import", verifyToken, async (req, res) => {
         res.status(500).json({ message: "Lỗi Server: " + err.message });
     } finally {
         connection.release();
+    }
+});
+// ==========================================
+// TỔNG HỢP TỒN KHO HIỆN TẠI TỪ TẤT CẢ CÁC KHO
+// (Hàm này Frontend dùng để vẽ bảng Mắt Thần)
+// ==========================================
+router.get("/inventory", verifyToken, async (req, res) => {
+    try {
+        const [rows] = await db.query(
+            `SELECT 
+                wp.product_id, 
+                p.name AS product_name, 
+                wp.warehouse_id, 
+                w.name AS warehouse_name, 
+                wp.quantity 
+            FROM warehouse_products wp
+            JOIN products p ON wp.product_id = p.id
+            JOIN warehouses w ON wp.warehouse_id = w.id
+            ORDER BY w.id ASC, p.name ASC`
+        );
+
+        res.json({ data: rows });
+    } catch (err) {
+        console.error("Lỗi truy vấn tồn kho:", err);
+        res.status(500).json({ message: "Lỗi Server khi lấy dữ liệu tồn kho!" });
     }
 });
 
@@ -170,6 +199,9 @@ router.post("/export", verifyToken, requireAdmin, async (req, res) => {
             [product_id, warehouse_id, target_warehouse_id || null, quantity, reason || "Chuyển kho"]
         );
 
+        // 5. Ghi log vào bảng logs
+        await logAction(connection, req.user.id, "export", "Chuyển kho", { product_id, warehouse_id, target_warehouse_id, quantity, reason });
+
         await connection.commit();
         res.json({ message: "Thao tác kho thành công" });
     } catch (err) {
@@ -179,5 +211,80 @@ router.post("/export", verifyToken, requireAdmin, async (req, res) => {
         connection.release();
     }
 });
+
+// ================= THÊM KHO MỚI (CHỈ ADMIN MỚI CÓ QUYỀN) =================
+router.post("/warehouses", verifyToken, requireAdmin, async (req, res) => {
+    try {
+        const { name } = req.body;
+        if (!name || name.trim() === "") {
+            return res.status(400).json({ message: "Vui lòng nhập tên kho!" });
+        }
+
+        // Kiểm tra xem tên kho này đã tồn tại chưa để tránh trùng lặp
+        const [existing] = await db.query("SELECT id FROM warehouses WHERE name = ?", [name.trim()]);
+        if (existing.length > 0) {
+            return res.status(400).json({ message: "Tên kho này đã có trên hệ thống rồi bạn ơi!" });
+        }
+
+        // Nhét vào Database
+        const [result] = await db.query("INSERT INTO warehouses (name) VALUES (?)", [name.trim()]);
+
+        // Ghi log
+        await logAction(db, req.user.id, "create_warehouse", "Thêm kho mới", { name: name.trim() });
+
+        res.json({ message: `Đã mở thành công: ${name.trim()}`, id: result.insertId });
+    } catch (err) {
+        console.error("Lỗi tạo kho mới:", err);
+        res.status(500).json({ message: "Lỗi Server khi tạo kho!" });
+    }
+});
+
+// ================= SỬA TÊN KHO (CHỈ ADMIN) =================
+router.put("/warehouses/:id", verifyToken, requireAdmin, async (req, res) => {
+    try {
+        const { name } = req.body;
+        if (!name || name.trim() === "") return res.status(400).json({ message: "Tên kho không được bỏ trống!" });
+
+        await db.query("UPDATE warehouses SET name = ? WHERE id = ?", [name.trim(), req.params.id]);
+        res.json({ message: "Đã đổi tên kho thành công!" });
+    } catch (err) {
+        console.error("Lỗi sửa tên kho:", err);
+        res.status(500).json({ message: "Lỗi Server!" });
+    }
+});
+
+// ================= XÓA KHO CÓ BẢO VỆ (CHỈ ADMIN) =================
+router.delete("/warehouses/:id", verifyToken, requireAdmin, async (req, res) => {
+    try {
+        const warehouseId = req.params.id;
+
+        // 1. CẦU DAO AN TOÀN: Kiểm tra xem kho này có đang chứa hàng không?
+        // SỬA LỖI Ở ĐÂY: Dùng product_id thay vì id vì bảng này không có cột id
+        const [checkStock] = await db.query(
+            "SELECT product_id FROM warehouse_products WHERE warehouse_id = ? AND quantity > 0 LIMIT 1",
+            [warehouseId]
+        );
+
+        if (checkStock.length > 0) {
+            return res.status(400).json({ message: "⛔ Kho này đang chứa hàng! Bạn phải xuất hết hàng đi nơi khác mới được xóa." });
+        }
+
+        // 2. DỌN DẸP RÁC: Xóa các dòng dữ liệu ảo (số lượng <= 0) của kho này trong warehouse_products để tránh vướng khóa ngoại
+        await db.query("DELETE FROM warehouse_products WHERE warehouse_id = ? AND quantity <= 0", [warehouseId]);
+
+        // 3. Thực hiện Xóa Kho chính
+        await db.query("DELETE FROM warehouses WHERE id = ?", [warehouseId]);
+        res.json({ message: "Đã xóa kho thành công!" });
+
+    } catch (err) {
+        // Nếu DB báo lỗi Ràng buộc khóa ngoại (Foreign Key) do đã có lịch sử xuất/nhập
+        if (err.code && err.code.includes('ER_ROW_IS_REFERENCED')) {
+            return res.status(400).json({ message: "⛔ Kho này đã có lịch sử giao dịch, không thể xóa để bảo toàn dữ liệu đối soát!" });
+        }
+        console.error("Lỗi xóa kho:", err);
+        res.status(500).json({ message: "Lỗi Server: Không thể xóa kho!" });
+    }
+});
+
 
 module.exports = router;

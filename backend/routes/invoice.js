@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const db = require("../db");
 const { verifyToken } = require("../middleware/authMiddleware");
+const { logAction } = require("../utils/logger");
 
 // ================= GET ALL INVOICES (LẤY DANH SÁCH HÓA ĐƠN) =================
 router.get("/", verifyToken, async (req, res) => {
@@ -39,7 +40,6 @@ router.get("/", verifyToken, async (req, res) => {
 });
 
 // Tạo hóa đơn
-// Tạo hóa đơn
 router.post("/", verifyToken, async (req, res) => {
   const { customer_id, items } = req.body;
 
@@ -57,10 +57,11 @@ router.post("/", verifyToken, async (req, res) => {
     const invoiceId = invoiceResult.insertId;
 
     let totalDeposit = 0;
-    
+    let grandTotal = 0;
+
     // 2 Insert invoice_items
     for (const item of items) {
-      
+
       // Lấy giá cọc mặc định từ Database để biết sản phẩm này có phải là Vỏ bình không
       const [productRows] = await connection.query(
         `SELECT deposit_price FROM products WHERE id = ?`,
@@ -82,8 +83,8 @@ router.post("/", verifyToken, async (req, res) => {
 
       // Chỉ ghi nhận nợ vỏ nếu SP đó là vỏ bình (có giá cọc) VÀ khách có ôm vỏ về (missing_bottles > 0)
       if (defaultDepositPrice > 0 && missing_bottles > 0) {
-        
-        totalDeposit += depositFee; 
+
+        totalDeposit += depositFee;
 
         await connection.query(`
           INSERT INTO bottle_deposits
@@ -99,8 +100,11 @@ router.post("/", verifyToken, async (req, res) => {
       `UPDATE invoices SET deposit_amount = ? WHERE id = ?`,
       [totalDeposit, invoiceId]
     );
-    
+
     await connection.commit();
+
+    // [CAMERA] Log tạo hóa đơn (Fix lỗi biến totalAmount chưa định nghĩa)
+    await logAction(req, "CREATE_INVOICE", "invoices", invoiceId, null, { items, grandTotal, totalDeposit }, `Tạo hóa đơn #${invoiceId} - Khách ID: ${customer_id}`);
 
     res.json({
       message: "Tạo hóa đơn thành công",
@@ -192,6 +196,8 @@ router.post("/return-bottle", verifyToken, async (req, res) => {
       VALUES (?, ?, ?, ?, 'da_tra', 'refund', NOW())
     `, [customer_id, product_id, quantity, amount]);
 
+    // [CAMERA] Log trả vỏ
+    await logAction(req, "RETURN_BOTTLE", "bottle_deposits", result.insertId, null, req.body, `Khách ${customer_id} trả ${quantity} vỏ bình`);
     res.json({ message: "Đã trả vỏ thành công" });
 
   } catch (err) {

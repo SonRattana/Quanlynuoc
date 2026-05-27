@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require("../db");
 const bcrypt = require("bcrypt");
 const { verifyToken, requireAdmin } = require("../middleware/authMiddleware");
+const { logAction } = require("../utils/logger");
 
 // 1. LẤY DANH SÁCH TÀI KHOẢN (Đã tích hợp Phân trang)
 router.get("/", verifyToken, requireAdmin, async (req, res) => {
@@ -49,6 +50,10 @@ router.post("/", verifyToken, requireAdmin, async (req, res) => {
             "INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)", 
             [username, email || '', hashedPassword, role || 'user']
         );
+        
+        // [CAMERA] Ghi nhận sự kiện tạo tài khoản
+        await logAction(req, "CREATE", "users", null, null, { username, email, role }, `Tạo tài khoản mới: ${username}`);
+        
         res.status(201).json({ message: "Tạo tài khoản thành công!" });
     } catch (err) {
         if (err.code === "ER_DUP_ENTRY") {
@@ -77,6 +82,10 @@ router.put("/:id", verifyToken, requireAdmin, async (req, res) => {
                 [username, email || '', role, userId]
             );
         }
+        
+        // [CAMERA] Ghi nhận sự kiện cập nhật tài khoản
+        await logAction(req, "UPDATE", "users", userId, null, { username, email, role }, `Cập nhật tài khoản: ${username}`);
+        
         res.json({ message: "Cập nhật thành công" });
     } catch (err) {
         res.status(500).json({ message: "Lỗi cập nhật tài khoản" });
@@ -90,6 +99,10 @@ router.delete("/:id", verifyToken, requireAdmin, async (req, res) => {
             return res.status(400).json({ message: "Không thể tự xóa tài khoản của chính mình!" });
         }
         await db.query("DELETE FROM users WHERE id = ?", [req.params.id]);
+        
+        // [CAMERA] Ghi nhận sự kiện xóa tài khoản
+        await logAction(req, "DELETE", "users", req.params.id, null, null, `Xóa tài khoản ID: ${req.params.id}`);
+        
         res.json({ message: "Đã xóa tài khoản" });
     } catch (err) {
         res.status(500).json({ message: "Lỗi xóa tài khoản" });

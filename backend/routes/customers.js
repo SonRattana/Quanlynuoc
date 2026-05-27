@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { verifyToken } = require('../middleware/authMiddleware');
+const { logAction } = require("../utils/logger");
 
 // 1. LẤY TẤT CẢ KHÁCH ĐANG ACTIVE (Thêm verifyToken)
 router.get('/', verifyToken, async (req, res) => {
@@ -38,28 +39,26 @@ router.post('/', verifyToken, async (req, res) => {
     if (existing.length > 0) {
       const customer = existing[0];
       if (customer.is_active === 0) {
-        await db.query(
-          `UPDATE customers SET name=?, address=?, type=?, is_active=1 WHERE id=?`,
-          [name, address, type || 'le', customer.id]
-        );
+        await db.query(`UPDATE customers SET name=?, address=?, type=?, is_active=1 WHERE id=?`, [name, address, type || 'le', customer.id]);
+
+        // [CAMERA] Log khôi phục khách cũ
+        await logAction(req, "RESTORE", "customers", customer.id, null, req.body, `Khôi phục khách hàng cũ: ${name}`);
+
         return res.json({ message: 'Khôi phục khách hàng cũ thành công', code: customer.customer_code });
       }
-      return res.status(400).json({ message: 'Số điện thoại này đã tồn tại trên hệ thống' });
+      return res.status(400).json({ message: 'Số điện thoại này đã tồn tại' });
     }
 
-    const [result] = await db.query(
-      `INSERT INTO customers (name, phone, address, type) VALUES (?, ?, ?, ?)`,
-      [name, phone, address, type || 'le']
-    );
-
+    const [result] = await db.query(`INSERT INTO customers (name, phone, address, type) VALUES (?, ?, ?, ?)`, [name, phone, address, type || 'le']);
     const newId = result.insertId;
     const code = 'KH' + newId;
     await db.query('UPDATE customers SET customer_code = ? WHERE id = ?', [code, newId]);
 
+    // [CAMERA] Log tạo mới
+    await logAction(req, "CREATE", "customers", newId, null, req.body, `Tạo khách hàng mới: ${name}`);
+
     res.json({ message: 'Tạo khách hàng thành công', code });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
+  } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
 // 3. SỬA KHÁCH HÀNG (MỚI: Chặn trùng SĐT khi sửa)
@@ -83,20 +82,26 @@ router.put('/:id', verifyToken, async (req, res) => {
       [name, phone, address, type, id]
     );
 
+    // [CAMERA] Log cập nhật
+    await logAction(req, "UPDATE", "customers", id, oldData[0], req.body, `Cập nhật khách hàng: ${name}`);
+
     res.json({ message: 'Cập nhật thành công' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// 4. XOÁ MỀM (Giữ nguyên)
+// 4. XOÁ MỀM
 router.delete('/:id', verifyToken, async (req, res) => {
   try {
+    const [oldData] = await db.query("SELECT name FROM customers WHERE id = ?", [req.params.id]);
     await db.query('UPDATE customers SET is_active = 0 WHERE id = ?', [req.params.id]);
+
+    // [CAMERA] Log xóa
+    await logAction(req, "DELETE", "customers", req.params.id, null, null, `Xóa khách hàng: ${oldData[0]?.name}`);
+
     res.json({ message: 'Đã xoá khách hàng' });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
+  } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
 // 5. THỐNG KÊ TỔNG HỢP (Dùng chung 1 route cho Dashboard để tối ưu tốc độ)
