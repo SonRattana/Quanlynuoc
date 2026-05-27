@@ -1,14 +1,13 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// export default defineConfig({
-//   plugins: [react()],
-//   server: {
-//     host: true,
-//     port: 5173,
-//   },
-// });
 export default defineConfig({
+  base: '/',
+  plugins: [react()],
+  // THÊM CỤC NÀY VÀO ĐỂ ÉP NÓ KHÔNG NGỐN RAM TẠO SOURCEMAP:
+  build: {
+    sourcemap: false,
+  },
   server: {
     proxy: {
       "/api": {

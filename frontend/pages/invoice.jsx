@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import Layout from "../components/layout";
+import Layout from "../components/Layout";
 import axios from "axios";
 import InvoiceModal from "../components/InvoiceModal";
 import Pagination from "../components/Pagination";

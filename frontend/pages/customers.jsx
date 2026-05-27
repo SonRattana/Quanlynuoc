@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import React from "react";
-import Layout from "../components/layout";
+import Layout from "../components/Layout";
 import Toast from "../components/Toast";
 import CustomersTable from "../components/customerstable";
 import DepositModal from "../components/depositModal";
