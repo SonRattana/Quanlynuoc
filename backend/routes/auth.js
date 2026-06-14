@@ -10,7 +10,7 @@ const { sendOTPEmail, sendResetPasswordEmail } = require("../mail");
 // [CAMERA] Nhập công cụ ghi log vào đây
 const { logAction } = require("../utils/logger");
 
-// LOGIN (Cổng Đăng Nhập "All In One")
+// LOGIN (Cổng Đăng Nhập CHỈ DÀNH CHO ADMIN / NHÂN VIÊN)
 router.post("/login",
   [
     body("email").notEmpty().withMessage("Email không được bỏ trống").isEmail().withMessage("Email không đúng định dạng"),
@@ -38,9 +38,9 @@ router.post("/login",
 
         let validPassword = false;
         if (user.password === password) {
-          validPassword = true; 
+          validPassword = true;
         } else {
-          validPassword = await bcrypt.compare(password, user.password); 
+          validPassword = await bcrypt.compare(password, user.password);
         }
 
         if (!validPassword) {
@@ -53,8 +53,7 @@ router.post("/login",
           { expiresIn: "1d" }
         );
 
-        // [CAMERA] Ghi nhận Admin/Nhân viên đăng nhập
-        req.user = { id: user.id }; // Gắn tạm ID vào req để Logger biết ai đang làm
+        req.user = { id: user.id };
         await logAction(req, "LOGIN", "users", user.id, null, null, `Nhân sự ${user.email} (Role: ${user.role}) vừa đăng nhập`);
 
         return res.json({
@@ -62,16 +61,17 @@ router.post("/login",
           user: {
             id: user.id,
             email: user.email,
-            name: user.username, 
+            name: user.username,
             phone: user.phone,
             role: user.role
           }
         });
       }
 
-      // ==========================================
-      // LẦN TÌM 2: TÌM TRONG BẢNG CUSTOMERS (KHÁCH HÀNG)
-      // ==========================================
+      // =======================================================================
+      // ⏸️ TẠM COMMENT ĐOẠN ĐĂNG NHẬP CỦA KHÁCH HÀNG (MỐT MỞ SHOP THÌ BỎ DẤU COMMENT ĐI)
+      // =======================================================================
+      /*
       const [customers] = await db.query(
         "SELECT * FROM customers WHERE email = ? LIMIT 1",
         [email]
@@ -101,7 +101,6 @@ router.post("/login",
           { expiresIn: "1d" }
         );
 
-        // [CAMERA] Ghi nhận Khách hàng đăng nhập
         req.user = { id: customer.id }; 
         await logAction(req, "LOGIN", "customers", customer.id, null, null, `Khách hàng ${customer.email} vừa đăng nhập`);
 
@@ -116,8 +115,10 @@ router.post("/login",
           }
         });
       }
+      */
+      // =======================================================================
 
-      return res.status(400).json({ message: "Email này chưa được đăng ký trên hệ thống!" });
+      return res.status(400).json({ message: "Tài khoản không tồn tại hoặc không có quyền truy cập!" });
 
     } catch (err) {
       console.error("Lỗi đăng nhập:", err);
@@ -125,12 +126,14 @@ router.post("/login",
     }
   });
 
-
 const otpStore = new Map();
 
 // ==========================================
-// 1. API NHẬN THÔNG TIN VÀ BẮN MÃ OTP (Chỉ gửi mail, không thay đổi DB nên không cần log)
+// CÁC ĐOẠN CODE LIÊN QUAN ĐẾN OTP (SEND OTP, REGISTER, FORGOT PASSWORD, CHANGE PASSWORD) BÊN DƯỚI SẾP CỨ GIỮ NGUYÊN HIỆN TRẠNG.
+// VÌ TƯƠNG LAI NẾU MỞ LẠI PUBLIC SHOP THÌ CHỈ CẦN THÊM LẠI LẦN TÌM 2 LÀ CÁC LUỒNG KIA TỰ KHỚP VỚI NHAU.
 // ==========================================
+
+// 1. API NHẬN THÔNG TIN VÀ BẮN MÃ OTP (Chỉ gửi mail, không thay đổi DB nên không cần log)
 router.post("/send-otp", async (req, res) => {
   try {
     const { name, phone, email, password } = req.body;
@@ -165,9 +168,7 @@ router.post("/send-otp", async (req, res) => {
   }
 });
 
-// ==========================================
 // 2. API XÁC THỰC OTP VÀ TẠO TÀI KHOẢN
-// ==========================================
 router.post("/register", async (req, res) => {
   try {
     const { email, otp } = req.body;
@@ -203,9 +204,7 @@ router.post("/register", async (req, res) => {
   }
 });
 
-// ==========================================
 // FORGOT PASSWORD - BƯỚC 1: NHẬN EMAIL VÀ BẮN OTP
-// ==========================================
 router.post("/forgot-password/send-otp", async (req, res) => {
   try {
     const { email } = req.body;
@@ -218,17 +217,24 @@ router.post("/forgot-password/send-otp", async (req, res) => {
 
     if (users.length > 0) {
       userType = "users";
-      userName = users[0].username; 
-    } else {
+      userName = users[0].username;
+    }
+    // =======================================================================
+    // ⏸️ TẠM COMMENT ĐOẠN QUÊN MẬT KHẨU CỦA KHÁCH HÀNG (MỐT BỎ COMMENT LÀ XÀI LẠI ĐƯỢC)
+    // =======================================================================
+    /*
+    else {
       const [customers] = await db.query("SELECT name FROM customers WHERE email = ? LIMIT 1", [email]);
       if (customers.length > 0) {
         userType = "customers";
         userName = customers[0].name; 
       }
     }
+    */
+    // =======================================================================
 
     if (!userType) {
-      return res.status(400).json({ message: "Email này chưa được đăng ký trong hệ thống!" });
+      return res.status(400).json({ message: "Email này không tồn tại hoặc bạn không có quyền truy cập!" });
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -243,9 +249,7 @@ router.post("/forgot-password/send-otp", async (req, res) => {
   }
 });
 
-// ==========================================
 // FORGOT PASSWORD - BƯỚC 2: XÁC NHẬN OTP & LƯU PASS MỚI
-// ==========================================
 router.post("/forgot-password/reset", async (req, res) => {
   try {
     const { email, otp, newPassword } = req.body;
@@ -263,10 +267,9 @@ router.post("/forgot-password/reset", async (req, res) => {
     await db.query(`UPDATE ${record.userType} SET password = ? WHERE email = ?`, [hashedPassword, email]);
 
     // [CAMERA] Ghi nhận sự kiện lấy lại mật khẩu
-    // Vì lúc quên mật khẩu người ta chưa đăng nhập, nên req.user = null, camera sẽ chỉ lưu IP.
     await logAction(req, "RESET_PASSWORD", record.userType, null, null, null, `Lấy lại mật khẩu thành công bằng OTP cho email: ${email}`);
 
-    otpStore.delete(email); 
+    otpStore.delete(email);
     res.json({ message: "Đổi mật khẩu thành công! Bạn có thể đăng nhập bằng mật khẩu mới." });
 
   } catch (err) {
@@ -275,9 +278,7 @@ router.post("/forgot-password/reset", async (req, res) => {
   }
 });
 
-// ==========================================
 // ĐỔI MẬT KHẨU CÓ XÁC THỰC OTP - BƯỚC 1: KIỂM TRA PASS CŨ & BẮN OTP
-// ==========================================
 router.post("/change-password/send-otp", async (req, res) => {
   try {
     const { email, role, oldPassword } = req.body;
@@ -294,27 +295,24 @@ router.post("/change-password/send-otp", async (req, res) => {
 
     const user = rows[0];
 
-    // Xác thực pass cũ
     let validPassword = false;
     if (user.password === oldPassword) {
-      validPassword = true; 
+      validPassword = true;
     } else {
-      validPassword = await bcrypt.compare(oldPassword, user.password); 
+      validPassword = await bcrypt.compare(oldPassword, user.password);
     }
 
     if (!validPassword) {
       return res.status(400).json({ message: "Mật khẩu cũ không chính xác bạn ơi!" });
     }
 
-    // Pass cũ chuẩn rồi thì đẻ mã OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // Lưu kho, đặt tên chìa khóa có chữ CHANGE_PASS để không đụng với Forgot Password
     otpStore.set(`CHANGE_PASS_${email}`, {
       otp,
       tableName,
       userId: user.id,
-      expires: Date.now() + 300000 // 5 phút
+      expires: Date.now() + 300000
     });
 
     await sendOTPEmail(email, user.name, otp);
@@ -327,9 +325,7 @@ router.post("/change-password/send-otp", async (req, res) => {
   }
 });
 
-// ==========================================
 // ĐỔI MẬT KHẨU CÓ XÁC THỰC OTP - BƯỚC 2: KIỂM TRA OTP & LƯU PASS MỚI
-// ==========================================
 router.post("/change-password/reset", async (req, res) => {
   try {
     const { email, newPassword, otp } = req.body;
@@ -349,14 +345,13 @@ router.post("/change-password/reset", async (req, res) => {
 
     const hashedNewPassword = await bcrypt.hash(newPassword, 10);
 
-    // Cập nhật pass mới
     await db.query(`UPDATE ${record.tableName} SET password = ? WHERE id = ?`, [hashedNewPassword, record.userId]);
 
     // [CAMERA HÀNH TRÌNH] Ghi log lại
-    req.user = { id: record.userId }; 
+    req.user = { id: record.userId };
     await logAction(req, "CHANGE_PASSWORD_AUTH", record.tableName, record.userId, null, null, `Đổi mật khẩu bảo mật (kèm OTP) thành công cho Email: ${email}`);
 
-    otpStore.delete(`CHANGE_PASS_${email}`); 
+    otpStore.delete(`CHANGE_PASS_${email}`);
 
     res.json({ success: true, message: "Đổi mật khẩu thành công rực rỡ! Bạn nhớ đăng nhập lại nhé." });
 

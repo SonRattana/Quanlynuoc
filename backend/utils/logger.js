@@ -7,7 +7,7 @@ const logAction = async (req, action, entity_table, entity_id, old_data = null, 
         // Đảm bảo các giá trị không bao giờ là undefined
         const user_id = req.user?.id || null; 
         const email = req.user?.email || null; 
-        const ip_address = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
+        const ip_address = req?.headers?.['x-forwarded-for'] || req?.ip || req?.socket?.remoteAddress || 'unknown';
 
         const query = `
             INSERT INTO system_logs 

@@ -85,9 +85,12 @@ exports.createOnlineOrder = async (req, res) => {
         // BẮN MAIL ÂM THẦM
         sendOrderEmail({
             customer_name,
+            customer_address,
             email,
             items,
             totalAmount,
+            deliveryFee: 0,
+            shipper_name: null,
             order_id: orderId
         })
             .then(() => console.log(` Mail hóa đơn đơn #${orderId} đã bay đi!`))
@@ -117,6 +120,7 @@ exports.getAllOrders = async (req, res) => {
                 o.id, 
                 c.name AS customer_name, 
                 c.phone, 
+                c.address AS customer_address,
                 c.email, 
                 o.shipping_address, 
                 o.note, 
@@ -238,7 +242,7 @@ exports.getOrderById = async (req, res) => {
         // Lấy thông tin đơn hàng + tên khách + sđt từ 2 bảng orders và customers
         const [orders] = await db.query(`
             SELECT o.id, o.total_amount, o.shipping_address, o.status, o.created_at, 
-                   c.name AS customer_name, c.phone 
+                   c.name AS customer_name, c.phone, c.address AS customer_address
             FROM orders o
             JOIN customers c ON o.customer_id = c.id
             WHERE o.id = ?
@@ -287,5 +291,55 @@ exports.lookupOrdersByEmail = async (req, res) => {
     } catch (error) {
         console.error("Lỗi tra cứu đơn hàng:", error);
         res.status(500).json({ message: "Lỗi server khi tra cứu đơn hàng" });
+    }
+};
+
+// ==========================================
+// ĐẾM SỐ ĐƠN HÀNG CHỜ XỬ LÝ (LÚC ADMIN VỪA MỞ WEB)
+// ==========================================
+exports.countPendingOrders = async (req, res) => {
+    try {
+        const [[{ totalPending }]] = await db.query("SELECT COUNT(id) as totalPending FROM orders WHERE status = 'pending'");
+        res.status(200).json({ count: totalPending });
+    } catch (error) {
+        console.error("Lỗi đếm đơn hàng tồn đọng:", error);
+        res.status(500).json({ message: "Lỗi server" });
+    }
+};
+
+// ==========================================
+// MOI RUỘT CHI TIẾT 1 ĐƠN HÀNG (DÀNH CHO ADMIN)
+// ==========================================
+exports.getAdminOrderDetails = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const [orders] = await db.query(`
+            SELECT o.*, c.name AS customer_name, c.phone, c.email, c.address AS customer_address
+            FROM orders o
+            JOIN customers c ON o.customer_id = c.id
+            WHERE o.id = ?
+        `, [id]);
+
+        if (orders.length === 0) {
+            return res.status(404).json({ message: "Không tìm thấy đơn hàng!" });
+        }
+
+        // BỔ SUNG: Kéo thêm cột p.deposit_price (Tiền cọc) từ bảng products
+        const [items] = await db.query(`
+            SELECT oi.quantity, oi.sell_price, p.name AS product_name, p.deposit_price
+            FROM order_items oi
+            JOIN products p ON oi.product_id = p.id
+            WHERE oi.order_id = ?
+        `, [id]);
+
+        res.status(200).json({
+            orderInfo: orders[0],
+            items: items
+        });
+
+    } catch (error) {
+        console.error("Lỗi moi ruột đơn hàng:", error);
+        res.status(500).json({ message: "Lỗi server!" });
     }
 };

@@ -53,6 +53,10 @@ app.use("/api/deposits", depositsRouter);
 app.use("/api/users", require("./routes/users"));
 app.use("/api/reports", require("./routes/reports"));
 app.use("/api/logs", require("./routes/logs"));
+app.use("/api/bom", require("./routes/bom"));
+app.use("/api/purchases", require("./routes/purchases"));
+app.use("/api/production", require("./routes/production"));
+app.use("/api/expenses", require("./routes/expenses"));
 
 // Thư mục chứa hình ảnh tĩnh
 app.use('/uploads', express.static('uploads'));

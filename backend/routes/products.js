@@ -8,40 +8,49 @@ const { verifyToken } = require("../middleware/authMiddleware");
 // ================= CẤU HÌNH MULTER ĐỂ LƯU ẢNH =================
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, 'uploads/') // Lưu vào thư mục uploads
+    cb(null, 'uploads/')
   },
   filename: function (req, file, cb) {
-    // Đổi tên file để không bị trùng (vd: 1689234234.jpg)
     cb(null, Date.now() + path.extname(file.originalname))
   }
 });
-
 const upload = multer({ storage: storage });
-// ================= GET ALL PRODUCTS (Nâng cấp Đa Kho) =================
-router.get("/", async (req, res) => {
+
+// ================= GET ALL PRODUCTS (ĐÃ TỐI ƯU & THÊM TÊN KHO) =================
+router.get("/", verifyToken, async (req, res) => {
   try {
-    const { warehouse_id } = req.query; // Nhận ID kho từ Frontend truyền lên
+    const { warehouse_id } = req.query;
 
-    if (warehouse_id) {
-      // DÀNH CHO MÀN HÌNH BÁN HÀNG POS: Lấy đúng tồn kho của kho chỉ định
-      const [rows] = await db.query(
-        `SELECT 
-                p.id, p.name, p.volume, p.unit, p.cost_price, p.sell_price, p.deposit_price, p.image,
-                IFNULL(wp.quantity, 0) AS quantity
-             FROM products p
-             LEFT JOIN warehouse_products wp 
-                ON p.id = wp.product_id AND wp.warehouse_id = ?`,
-        [warehouse_id]
-      );
-      return res.json(rows);
-    }
+    let query = `
+      SELECT 
+        p.id, p.name, p.volume, p.unit, p.cost_price, p.sell_price, 
+        p.deposit_price, p.image, p.wholesale_price, p.wholesale_min_quantity, 
+        p.requires_deposit, p.item_type,
+        IFNULL(wp.quantity, 0) AS quantity,
+        IFNULL(w.name, 'Kho Tổng') AS warehouse_name /* 💡 ĐIỂM ĂN TIỀN 1: Lấy tên kho */
+      FROM products p
+      LEFT JOIN warehouse_products wp ON p.id = wp.product_id ${warehouse_id ? 'AND wp.warehouse_id = ?' : ''}
+      LEFT JOIN warehouses w ON wp.warehouse_id = w.id /* 💡 ĐIỂM ĂN TIỀN 2: Kết nối với bảng kho */
+      WHERE p.is_active = 1
+    `;
 
-    // DÀNH CHO QUẢN LÝ TỔNG: Không truyền kho thì lấy Tồn kho tổng của công ty
-    const [rows] = await db.query("SELECT * FROM products");
+    const params = warehouse_id ? [warehouse_id] : [];
+    const [rows] = await db.query(query, params);
+
     res.json(rows);
   } catch (err) {
-    console.error("Lỗi GET API Products:", err); // Gắn thêm log để mốt lỡ lỗi còn biết đường mò
-    res.status(500).json(err);
+    console.error("Lỗi GET API Products:", err);
+    res.status(500).json({ message: "Lỗi lấy danh sách sản phẩm" });
+  }
+});
+
+// ================= GET TRASH LIST =================
+router.get("/trash/list", verifyToken, async (req, res) => {
+  try {
+    const [rows] = await db.query("SELECT * FROM products WHERE is_active = 0 ORDER BY id DESC");
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi hệ thống" });
   }
 });
 
@@ -56,66 +65,88 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-/// ================= ADD PRODUCT (CÓ ẢNH) =================
-// Dùng upload.single('image') để hứng cái file gửi lên
-router.post("/", verifyToken, upload.single('image'), async (req, res) => {
-  try {
-    const { name, volume, unit, cost_price, sell_price, deposit_price } = req.body;
-
-    // Lấy đường dẫn ảnh nếu có up
-    const imagePath = req.file ? `/uploads/${req.file.filename}` : null;
-
-    const volumeNumber = Number(volume);
-    const costPrice = Number(cost_price ?? 0);
-    const sellPrice = Number(sell_price ?? 0);
-    const depositPrice = Number(deposit_price ?? 0);
-
-    if (!name?.trim()) {
-      return res.status(400).json({ message: "Tên sản phẩm bắt buộc" });
-    }
-    if (!Number.isInteger(volumeNumber) || volumeNumber <= 0) {
-      return res.status(400).json({ message: "Thể tích phải là số nguyên dương" });
-    }
-
-    const [result] = await db.query(
-      `INSERT INTO products (name, volume, unit, cost_price, sell_price, deposit_price, image)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [name.trim(), volumeNumber, unit, costPrice, sellPrice, depositPrice, imagePath]
-    );
-    // [CAMERA] Ghi log thêm mới
-    await logAction(req, "CREATE", "products", result.insertId, null, req.body, `Thêm sản phẩm mới: ${name}`);
-
-    return res.status(201).json({ message: "Thêm sản phẩm thành công", productId: result.insertId });
-
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Internal server error" });
-  }
-});
-
-// ================= UPDATE PRODUCT (CÓ ẢNH) =================
-router.put("/:id", verifyToken, upload.single('image'), async (req, res) => {
+// ================= GET PRODUCT BATCHES (LÔ TỒN KHO FIFO) =================
+router.get("/:id/batches", async (req, res) => {
   try {
     const { id } = req.params;
 
-    // 1. LẤY DATA CŨ TRƯỚC (Để so sánh và ghi log)
-    const [oldRows] = await db.query("SELECT * FROM products WHERE id = ?", [id]);
-    if (oldRows.length === 0) {
-      return res.status(404).json({ message: "Không thấy sản phẩm" });
+    // Lấy tất cả các lô của sản phẩm này mà vẫn còn hàng (quantity_remaining > 0)
+    // Sắp xếp theo created_at ASC (Cũ nhất lên đầu để xuất FIFO)
+    const [rows] = await db.query(
+      `SELECT * FROM inventory_batches 
+       WHERE product_id = ? AND quantity_remaining > 0 
+       ORDER BY created_at ASC`,
+      [id]
+    );
+
+    res.json(rows);
+  } catch (err) {
+    console.error("Lỗi GET API Batches:", err);
+    res.status(500).json({ message: "Lỗi hệ thống khi lấy chi tiết lô" });
+  }
+});
+
+// ================= ADD PRODUCT =================
+router.post("/", verifyToken, upload.single('image'), async (req, res) => {
+  try {
+    // 💡 BỔ SUNG: Nhận giá sỉ và mốc số lượng từ giao diện
+    const { name, volume, unit, cost_price, sell_price, deposit_price, item_type, size_group, wholesale_price, wholesale_min_quantity, requires_deposit } = req.body;
+    const imagePath = req.file ? `/uploads/${req.file.filename}` : null;
+
+    let volumeNumber = Number(volume);
+    let costPrice = Number(cost_price ?? 0);
+    let sellPrice = Number(sell_price ?? 0);
+    let depositPrice = Number(deposit_price ?? 0);
+    let wsPrice = Number(wholesale_price ?? 0);
+    let wsMinQty = Number(wholesale_min_quantity ?? 0);
+
+    if (item_type === 'nguyen_lieu') {
+      costPrice = 0; sellPrice = 0; depositPrice = 0; volumeNumber = 1; wsPrice = 0; wsMinQty = 0;
     }
 
-    const { name, volume, unit, cost_price, sell_price, deposit_price } = req.body;
+    if (!name?.trim()) return res.status(400).json({ message: "Tên sản phẩm bắt buộc" });
+
+    // 💡 BỔ SUNG: Đẩy vào Database
+    const [result] = await db.query(
+      `INSERT INTO products (name, volume, unit, cost_price, sell_price, deposit_price, image, item_type, size_group, wholesale_price, wholesale_min_quantity, requires_deposit)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [name.trim(), volumeNumber, unit, costPrice, sellPrice, depositPrice, imagePath, item_type || 'thanh_pham', size_group, wsPrice, wsMinQty, Number(requires_deposit) === 1 ? 1 : 0]
+    );
+
+    await logAction(req, "CREATE", "products", result.insertId, null, req.body, `Thêm sản phẩm mới: ${name}`);
+    return res.status(201).json({ message: "Thêm sản phẩm thành công", productId: result.insertId });
+
+  } catch (err) {
+    console.error("LỖI THÊM SẢN PHẨM CHI TIẾT:", err);
+    res.status(500).json({ message: "Lỗi thật là: " + err.message });
+  }
+});
+
+// ================= UPDATE PRODUCT =================
+router.put("/:id", verifyToken, upload.single('image'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [oldRows] = await db.query("SELECT * FROM products WHERE id = ?", [id]);
+    if (oldRows.length === 0) return res.status(404).json({ message: "Không thấy sản phẩm" });
+
+    // 💡 BỔ SUNG: Nhận giá sỉ và mốc số lượng từ giao diện
+    const { name, volume, unit, cost_price, sell_price, deposit_price, item_type, size_group, wholesale_price, wholesale_min_quantity, requires_deposit } = req.body;
     const newImagePath = req.file ? `/uploads/${req.file.filename}` : null;
 
-    // Kiểm tra đầu vào
-    if (!name || !volume || !unit || !cost_price || !sell_price) {
-      return res.status(400).json({ message: "Vui lòng nhập đầy đủ thông tin" });
+    let volumeNumber = Number(volume);
+    let costPrice = Number(cost_price ?? 0);
+    let sellPrice = Number(sell_price ?? 0);
+    let depositPrice = Number(deposit_price ?? 0);
+    let wsPrice = Number(wholesale_price ?? 0);
+    let wsMinQty = Number(wholesale_min_quantity ?? 0);
+
+    if (item_type === 'nguyen_lieu') {
+      costPrice = 0; sellPrice = 0; depositPrice = 0; volumeNumber = 1; wsPrice = 0; wsMinQty = 0;
     }
 
-    // 2. XÂY DỰNG CÂU QUERY CẬP NHẬT
-    let query = `UPDATE products SET name=?, volume=?, unit=?, cost_price=?, sell_price=?, deposit_price=?`;
-    let params = [name, volume, unit, cost_price, sell_price, deposit_price];
+    // 💡 BỔ SUNG: Cập nhật vào Database
+    let query = `UPDATE products SET name=?, volume=?, unit=?, cost_price=?, sell_price=?, deposit_price=?, item_type=?, size_group=?, wholesale_price=?, wholesale_min_quantity=?, requires_deposit=?`;
+    let params = [name, volumeNumber, unit, costPrice, sellPrice, depositPrice, item_type || 'thanh_pham', size_group, wsPrice, wsMinQty, Number(requires_deposit) === 1 ? 1 : 0];
 
     if (newImagePath) {
       query += `, image=?`;
@@ -125,71 +156,90 @@ router.put("/:id", verifyToken, upload.single('image'), async (req, res) => {
     query += ` WHERE id=?`;
     params.push(id);
 
-    const [result] = await db.query(query, params);
+    await db.query(query, params);
+    await logAction(req, "UPDATE", "products", id, oldRows[0], req.body, `Cập nhật thông tin sản phẩm: ${name}`);
+
+    return res.json({ message: "Cập nhật thành công" });
+
+  } catch (err) {
+    console.error("LỖI CẬP NHẬT SẢN PHẨM:", err);
+    if (!res.headersSent) return res.status(500).json({ message: "Lỗi hệ thống khi cập nhật" });
+  }
+});
+
+// ================= DELETE PRODUCT =================
+router.delete("/:id", verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const [stockRows] = await db.query("SELECT SUM(quantity) as total_stock FROM warehouse_products WHERE product_id = ?", [id]);
+    const totalStock = Number(stockRows[0]?.total_stock || 0);
+
+    if (totalStock !== 0) {
+      return res.status(400).json({ message: `Không thể xóa! Sản phẩm này vẫn còn tồn kho (${totalStock} sản phẩm). Sếp phải làm phiếu xuất hủy hoặc chuyển kho hết về số 0 trước khi ẩn.` });
+    }
+
+    const [depositRows] = await db.query("SELECT COUNT(*) as active_deposits FROM bottle_deposits WHERE product_id = ? AND status = 'dang_giu'", [id]);
+    const activeDeposits = Number(depositRows[0]?.active_deposits || 0);
+
+    if (activeDeposits > 0) {
+      return res.status(400).json({ message: `Không thể xóa! Vẫn còn khách hàng đang giữ vỏ của loại sản phẩm này. Sếp phải xử lý thu hồi/hoàn tiền cọc vỏ hết đã.` });
+    }
+
+    const [product] = await db.query("SELECT * FROM products WHERE id = ?", [id]);
+    if (product.length === 0) return res.status(404).json({ message: "Không tìm thấy sản phẩm" });
+
+    await db.query("UPDATE products SET is_active = 0 WHERE id = ?", [id]);
+    await logAction(req, "DELETE", "products", id, product[0], null, `Xóa (Ngừng kinh doanh) sản phẩm: ${product[0].name}`);
+
+    return res.json({ message: "Đã xóa (ẩn) sản phẩm thành công" });
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server khi xóa sản phẩm" });
+  }
+});
+
+// ================= RESTORE PRODUCT =================
+router.put("/:id/restore", verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [result] = await db.query("UPDATE products SET is_active = 1 WHERE id = ?", [id]);
+    if (result.affectedRows === 0) return res.status(404).json({ message: "Không tìm thấy sản phẩm để khôi phục" });
+
+    await logAction(req, "RESTORE", "products", id, null, null, `Khôi phục (Bán lại) sản phẩm ID: ${id}`);
+    return res.json({ message: "Đã khôi phục sản phẩm thành công!" });
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server khi khôi phục" });
+  }
+});
+
+// ================= FORCE DELETE PRODUCT =================
+router.delete("/:id/force", verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // BƯỚC 1: Kiểm tra xem sản phẩm có đang được dùng ở đâu không
+    const [checkStock] = await db.query("SELECT COUNT(*) as count FROM warehouse_products WHERE product_id = ?", [id]);
+    const [checkOrders] = await db.query("SELECT COUNT(*) as count FROM order_items WHERE product_id = ?", [id]);
+
+    if (checkStock[0].count > 0 || checkOrders[0].count > 0) {
+      return res.status(400).json({
+        message: "Không thể xóa vĩnh viễn! Sản phẩm này đã có lịch sử nhập/xuất hoặc đã từng bán. Sếp chỉ nên 'Ẩn' sản phẩm để bảo toàn dữ liệu lịch sử."
+      });
+    }
+
+    // BƯỚC 2: Nếu không có lịch sử gì thì mới cho xóa
+    const [result] = await db.query("DELETE FROM products WHERE id = ?", [id]);
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Không tìm thấy sản phẩm" });
     }
 
-    // 3. [CAMERA] Ghi log cập nhật (Sử dụng hàm chuẩn mới)
-    // Phải gọi await trước khi gửi res.json
-    await logAction(
-      req,
-      "UPDATE",
-      "products",
-      id,
-      oldRows[0],
-      req.body,
-      `Cập nhật thông tin sản phẩm: ${name}`
-    );
-
-    // 4. PHẢN HỒI CUỐI CÙNG (Dùng return để kết thúc hàm tại đây)
-    return res.json({ message: "Cập nhật thành công" });
-
+    await logAction(req, "FORCE_DELETE", "products", id, null, null, `Xóa vĩnh viễn sản phẩm ID: ${id}`);
+    return res.json({ message: "Đã xóa vĩnh viễn sản phẩm khỏi Database!" });
 
   } catch (err) {
-    console.error("Lỗi cập nhật sản phẩm:", err);
-    // Nếu chưa gửi bất kỳ phản hồi nào thì mới gửi lỗi 500
-    if (!res.headersSent) {
-      return res.status(500).json({ message: "Lỗi hệ thống khi cập nhật" });
-    }
-  }
-});
-
-// ================= DELETE PRODUCT (Đã dọn dẹp rác kho) =================
-router.delete("/:id", async (req, res) => {
-  const connection = await db.getConnection();
-
-  try {
-    const { id } = req.params;
-
-    await connection.beginTransaction();
-
-    // 1. Xóa lịch sử giao dịch kho
-    await connection.query("DELETE FROM stock_transactions WHERE product_id = ?", [id]);
-
-    // 2. MỚI: Xóa sạch tồn kho rải rác ở các kho (Cửa hàng, Kho tổng...)
-    await connection.query("DELETE FROM warehouse_products WHERE product_id = ?", [id]);
-
-    // 3. Xóa sản phẩm gốc
-    const [result] = await connection.query("DELETE FROM products WHERE id = ?", [id]);
-
-    if (result.affectedRows === 0)
-      return res.status(404).json({ message: "Không tìm thấy sản phẩm" });
-
-    // [CAMERA] Ghi log xóa
-    if (product.length > 0) {
-      await logAction(req, "DELETE", "products", id, product[0], null, `Xóa sản phẩm: ${product[0].name}`);
-    }
-
-    await connection.commit();
-    return res.json({ message: "Xoá sản phẩm thành công" });
-
-  } catch (err) {
-    await connection.rollback();
-    return res.status(500).json(err);
-  } finally {
-    connection.release();
+    console.error("Lỗi xóa vĩnh viễn:", err);
+    res.status(500).json({ message: "Lỗi server khi xóa vĩnh viễn" });
   }
 });
 
