@@ -4,14 +4,15 @@ import api from "../src/utils/axios";
 export default function DepositModal({ customer, onClose, onSuccess }) {
     const [quantity, setQuantity] = useState(1);
     const [amountPerUnit, setAmountPerUnit] = useState(0);
-    const [defaultAmount, setDefaultAmount] = useState(0); // THÊM: Lưu giá gốc để so sánh
-    const [note, setNote] = useState(""); // THÊM: Lưu ghi chú lý do đổi giá
+    const [defaultAmount, setDefaultAmount] = useState(0); 
+    const [note, setNote] = useState(""); 
 
     const [loading, setLoading] = useState(false);
     const token = localStorage.getItem("token");
     const [deposits, setDeposits] = useState([]);
     const [productId, setProductId] = useState(null);
     const [currentBalance, setCurrentBalance] = useState(0);
+    const [isFetching, setIsFetching] = useState(true); // Thêm loading khi quét vỏ
 
     const formatMoney = (value) => {
         return Number(value).toLocaleString("vi-VN") + " đ";
@@ -25,6 +26,7 @@ export default function DepositModal({ customer, onClose, onSuccess }) {
         if (!customer?.id) return;
 
         const fetchDeposits = async () => {
+            setIsFetching(true);
             try {
                 const res = await api.get(
                     `api/customers/${customer.id}/deposit`,
@@ -33,45 +35,51 @@ export default function DepositModal({ customer, onClose, onSuccess }) {
                     }
                 );
 
-                setDeposits(res.data);
+                // 💡 LỌC SẠCH LỖI NaN: Chỉ lấy những loại vỏ còn nợ (số lượng > 0)
+                const activeDeposits = res.data.filter(item => Number(item.bottles) > 0);
+                
+                setDeposits(activeDeposits);
 
-                if (res.data.length > 0) {
-                    const firstProduct = res.data[0];
+                if (activeDeposits.length > 0) {
+                    const firstProduct = activeDeposits[0];
                     const unitPrice = firstProduct.deposit_money / firstProduct.bottles;
 
                     setProductId(firstProduct.product_id);
                     setAmountPerUnit(unitPrice);
-                    setDefaultAmount(unitPrice); // Lưu giá gốc
+                    setDefaultAmount(unitPrice); 
 
-                    const totalBalance = res.data.reduce(
+                    const totalBalance = activeDeposits.reduce(
                         (sum, item) => sum + Number(item.deposit_money),
                         0
                     );
                     setCurrentBalance(totalBalance);
+                } else {
+                    setCurrentBalance(0);
+                    setProductId(null);
                 }
             } catch (err) {
                 console.error("Lỗi lấy deposits");
+            } finally {
+                setIsFetching(false);
             }
         };
 
         fetchDeposits();
     }, [customer?.id, token]);
 
-    // Tìm xem khách đang giữ bao nhiêu vỏ của loại đang chọn
     const currentSelectedProduct = deposits.find(d => d.product_id === productId);
     const maxBottlesAllowed = currentSelectedProduct ? currentSelectedProduct.bottles : 0;
 
-    // Kiểm tra xem giá có bị sửa khác với giá gốc không
     const isPriceChanged = amountPerUnit !== defaultAmount;
 
     const isInvalid =
         !productId ||
         quantity <= 0 ||
         quantity > maxBottlesAllowed ||
-        amountPerUnit < 0 || // Cho phép = 0 (khách không lấy lại cọc)
+        amountPerUnit < 0 || 
         totalRefund < 0 ||
-        totalRefund > currentBalance;
-    (isPriceChanged && note.trim() === ""); // BẮT BUỘC: Nếu đổi giá thì phải có ghi chú
+        totalRefund > currentBalance || 
+        (isPriceChanged && note.trim() === ""); 
 
     const handleRefund = async () => {
         if (isInvalid) return;
@@ -85,7 +93,6 @@ export default function DepositModal({ customer, onClose, onSuccess }) {
                     product_id: productId || null,
                     quantity: Number(quantity),
                     amount_per_unit: Number(amountPerUnit),
-                    // note: isPriceChanged ? (note.trim() !== "" ? note : "Đổi giá cọc không ghi lý do") : "Hoàn vỏ bình thường"
                     note: isPriceChanged ? note : "Hoàn vỏ bình thường"
                 },
                 {
@@ -93,7 +100,8 @@ export default function DepositModal({ customer, onClose, onSuccess }) {
                 }
             );
 
-            onSuccess();
+            // Cập nhật lại danh sách và đóng form
+            if (onSuccess) onSuccess();
             onClose();
         } catch (err) {
             alert("Hoàn tiền thất bại");
@@ -105,152 +113,170 @@ export default function DepositModal({ customer, onClose, onSuccess }) {
     return (
         <>
             <div className="modal fade show d-block">
-                <div className="modal-dialog modal-sm">
-                    <div className="modal-content shadow">
+                <div className="modal-dialog modal-sm modal-dialog-centered">
+                    <div className="modal-content shadow border-0" style={{ borderRadius: '12px', overflow: 'hidden' }}>
 
-                        <div className="modal-header bg-primary text-white">
-                            <h5 className="modal-title">Hoàn tiền vỏ</h5>
+                        <div className="modal-header bg-primary text-white border-0">
+                            <h5 className="modal-title fw-bold">Hoàn tiền vỏ</h5>
                             <button className="btn-close btn-close-white" onClick={onClose}></button>
                         </div>
 
-                        <div className="modal-body">
-
-                            <div className="mb-2">
-                                <strong>Khách:</strong> {customer.name}
+                        {/* 💡 KIỂM TRA: NẾU ĐANG TẢI DỮ LIỆU */}
+                        {isFetching ? (
+                            <div className="modal-body text-center py-5">
+                                <div className="spinner-border text-primary" role="status"></div>
+                                <p className="text-muted mt-2 small">Đang kiểm tra kho vỏ...</p>
                             </div>
-
-                            <div className="mb-3">
-                                <strong>Số dư hiện tại:</strong>{" "}
-                                <span className="text-success fw-bold">
-                                    {formatMoney(currentBalance)}
-                                </span>
+                        ) : deposits.length === 0 ? (
+                            /* 💡 GIAO DIỆN MỚI: NẾU KHÁCH KHÔNG NỢ VỎ HOẶC ĐÃ TRẢ HẾT */
+                            <div>
+                                <div className="modal-body text-center py-5">
+                                    <i className="fa fa-check-circle text-success mb-3" style={{ fontSize: "4rem" }}></i>
+                                    <h5 className="fw-bold text-success mb-1">Đã trả hết vỏ!</h5>
+                                    <p className="text-muted small px-3">
+                                        Khách hàng <strong>{customer.name}</strong> hiện không còn nợ vỏ bình nào.
+                                    </p>
+                                </div>
+                                <div className="modal-footer border-0 bg-light justify-content-center">
+                                    <button className="btn btn-secondary px-4 fw-bold shadow-sm" onClick={onClose}>
+                                        Đóng cửa sổ
+                                    </button>
+                                </div>
                             </div>
-
-                            <div className="mb-3">
-                                <label className="form-label">Chọn loại vỏ khách trả</label>
-                                <select
-                                    className="form-select"
-                                    value={productId || ""}
-                                    onChange={(e) => {
-                                        const selectedId = Number(e.target.value);
-                                        setProductId(selectedId);
-
-                                        const selectedItem = deposits.find(d => d.product_id === selectedId);
-                                        if (selectedItem) {
-                                            const unitPrice = selectedItem.deposit_money / selectedItem.bottles;
-                                            setAmountPerUnit(unitPrice);
-                                            setDefaultAmount(unitPrice); // Cập nhật lại giá gốc
-                                            setQuantity(1);
-                                            setNote(""); // Reset ghi chú
-                                        }
-                                    }}
-                                >
-                                    <option value="" disabled>-- Chọn vỏ cần trả --</option>
-                                    {deposits.map((item, index) => (
-                                        <option key={index} value={item.product_id}>
-                                            {item.name} (Đang giữ: {item.bottles} vỏ)
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div className="mb-3">
-                                <label className="form-label">Số lượng trả</label>
-                                <input
-                                    type="number"
-                                    className="form-control"
-                                    min="1"
-                                    max={maxBottlesAllowed}
-                                    value={quantity}
-                                    onChange={(e) => {
-                                        const value = Number(e.target.value);
-                                        setQuantity(value > 0 ? value : 1);
-                                    }}
-                                />
-                                {quantity > maxBottlesAllowed && (
-                                    <div className="text-danger small mt-1">
-                                        Khách chỉ nợ {maxBottlesAllowed} vỏ loại này.
+                        ) : (
+                            /* GIAO DIỆN CŨ: NẾU KHÁCH VẪN CÒN NỢ VỎ */
+                            <div>
+                                <div className="modal-body">
+                                    <div className="mb-2">
+                                        <strong>Khách:</strong> {customer.name}
                                     </div>
-                                )}
-                            </div>
 
-                            <div className="mb-3">
-                                <label className="form-label">Tiền cọc mỗi bình</label>
-                                <input
-                                    type="number"
-                                    className="form-control"
-                                    min="0"
-                                    value={amountPerUnit}
-                                    onChange={(e) => {
-                                        const value = e.target.value; // Lấy giá trị chuỗi thô
+                                    <div className="mb-3">
+                                        <strong>Số dư hiện tại:</strong>{" "}
+                                        <span className="text-success fw-bold">
+                                            {formatMoney(currentBalance)}
+                                        </span>
+                                    </div>
 
-                                        // Nếu người dùng xóa hết, cho phép nó thành ô trống
-                                        if (value === "") {
-                                            setAmountPerUnit("");
-                                        } else {
-                                            // Nếu có nhập số thì kiểm tra để không bị số âm
-                                            setAmountPerUnit(Number(value) >= 0 ? Number(value) : 0);
-                                        }
-                                    }}
-                                    // disabled
-                                />
-                            </div>
+                                    <div className="mb-3">
+                                        <label className="form-label">Chọn loại vỏ khách trả</label>
+                                        <select
+                                            className="form-select border-primary"
+                                            value={productId || ""}
+                                            onChange={(e) => {
+                                                const selectedId = Number(e.target.value);
+                                                setProductId(selectedId);
 
-                            {/* TỰ ĐỘNG HIỆN Ô LÝ DO NẾU ĐỔI GIÁ */}
-                            {isPriceChanged && (
-                                <div className="mb-3">
-                                    <label className="form-label text-danger fw-bold">
-                                        Lý do thay đổi tiền cọc (*)
-                                    </label>
-                                    <input
-                                        type="text"
-                                        className="form-control border-warning"
-                                        placeholder="VD: Trừ 10k do móp vỏ..."
-                                        value={note}
-                                        onChange={(e) => setNote(e.target.value)}
-                                        required
-                                    />
+                                                const selectedItem = deposits.find(d => d.product_id === selectedId);
+                                                if (selectedItem) {
+                                                    const unitPrice = selectedItem.deposit_money / selectedItem.bottles;
+                                                    setAmountPerUnit(unitPrice);
+                                                    setDefaultAmount(unitPrice); 
+                                                    setQuantity(1);
+                                                    setNote(""); 
+                                                }
+                                            }}
+                                        >
+                                            <option value="" disabled>-- Chọn vỏ cần trả --</option>
+                                            {deposits.map((item, index) => (
+                                                <option key={index} value={item.product_id}>
+                                                    {item.name} (Đang giữ: {item.bottles} vỏ)
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <div className="mb-3">
+                                        <label className="form-label">Số lượng trả</label>
+                                        <input
+                                            type="number"
+                                            className="form-control fw-bold text-primary"
+                                            min="1"
+                                            max={maxBottlesAllowed}
+                                            value={quantity}
+                                            onChange={(e) => {
+                                                const value = Number(e.target.value);
+                                                setQuantity(value > 0 ? value : 1);
+                                            }}
+                                        />
+                                        {quantity > maxBottlesAllowed && (
+                                            <div className="text-danger small mt-1 fw-bold">
+                                                <i className="fa fa-exclamation-circle me-1"></i>
+                                                Khách chỉ nợ {maxBottlesAllowed} vỏ loại này.
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="mb-3">
+                                        <label className="form-label">Tiền cọc mỗi bình</label>
+                                        <input
+                                            type="number"
+                                            className="form-control"
+                                            min="0"
+                                            value={amountPerUnit}
+                                            onChange={(e) => {
+                                                const value = e.target.value; 
+                                                if (value === "") {
+                                                    setAmountPerUnit("");
+                                                } else {
+                                                    setAmountPerUnit(Number(value) >= 0 ? Number(value) : 0);
+                                                }
+                                            }}
+                                        />
+                                    </div>
+
+                                    {isPriceChanged && (
+                                        <div className="mb-3 p-2 bg-warning bg-opacity-10 border border-warning rounded">
+                                            <label className="form-label text-danger fw-bold mb-1">
+                                                Lý do thay đổi tiền cọc (*)
+                                            </label>
+                                            <input
+                                                type="text"
+                                                className="form-control border-warning"
+                                                placeholder="VD: Trừ 10k do móp vỏ..."
+                                                value={note}
+                                                onChange={(e) => setNote(e.target.value)}
+                                                required
+                                            />
+                                        </div>
+                                    )}
+
+                                    <div className="alert alert-info py-2 shadow-sm border-info">
+                                        <strong className="text-dark">Tổng hoàn:</strong>{" "}
+                                        <span className="fs-5 text-primary fw-bold">{formatMoney(totalRefund)}</span>
+                                    </div>
+
+                                    {totalRefund > currentBalance && (
+                                        <div className="text-danger small fw-bold mt-2">
+                                            <i className="fa fa-times-circle me-1"></i>
+                                            Không được hoàn vượt quá số dư hiện tại!
+                                        </div>
+                                    )}
+
                                 </div>
-                            )}
 
-                            <div className="alert alert-info py-2">
-                                <strong>Tổng hoàn:</strong>{" "}
-                                {formatMoney(totalRefund)}
-                            </div>
+                                <div className="modal-footer bg-light border-0">
+                                    <button className="btn btn-secondary fw-bold" onClick={onClose}>
+                                        Hủy
+                                    </button>
 
-                            {totalRefund > currentBalance && (
-                                <div className="text-danger small fw-bold">
-                                    Không được hoàn vượt quá số dư hiện tại!
+                                    <button
+                                        className="btn btn-primary fw-bold px-4 shadow-sm"
+                                        onClick={handleRefund}
+                                        disabled={isInvalid || loading}
+                                    >
+                                        {loading ? <span className="spinner-border spinner-border-sm me-2"></span> : null}
+                                        {loading ? "Đang xử lý..." : "Xác nhận"}
+                                    </button>
                                 </div>
-                            )}
-
-                        </div>
-
-                        <div className="modal-footer">
-                            <button
-                                className="btn btn-secondary"
-                                onClick={onClose}
-                            >
-                                Hủy
-                            </button>
-
-                            <button
-                                className="btn btn-primary"
-                                onClick={handleRefund}
-                                disabled={isInvalid || loading}
-                            >
-                                {loading ? "Đang xử lý..." : "Xác nhận"}
-                            </button>
-                        </div>
+                            </div>
+                        )}
 
                     </div>
                 </div>
             </div>
 
-            <div
-                className="modal-backdrop fade show"
-                onClick={onClose}
-            ></div>
+            <div className="modal-backdrop fade show" onClick={onClose}></div>
         </>
     );
 }

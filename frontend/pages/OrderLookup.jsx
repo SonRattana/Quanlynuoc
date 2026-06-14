@@ -84,7 +84,7 @@ export default function OrderLookup() {
                             </div>
                         ) : (
                             <div className="table-responsive">
-                                <table className="table table-hover align-middle">
+                                <table className="table table-hover align-middle table-mobile-cards">
                                     <thead className="table-light">
                                         <tr>
                                             <th>Mã Đơn</th>
@@ -98,18 +98,18 @@ export default function OrderLookup() {
                                     <tbody>
                                         {orders.map(o => (
                                             <tr key={o.id}>
-                                                <td className="fw-bold text-danger">#{o.id}</td>
-                                                <td style={{ maxWidth: '200px' }} className="text-truncate" title={o.product_names}>
+                                                <td data-label="Mã Đơn" className="fw-bold text-danger">#{o.id}</td>
+                                                <td data-label="Sản Phẩm" style={{ maxWidth: '200px' }} className="text-truncate" title={o.product_names}>
                                                     {o.product_names || <span className="text-muted fst-italic">Không rõ</span>}
                                                 </td>
-                                                <td>{formatDate(o.created_at)}</td>
-                                                <td className="fw-bold text-primary">{formatMoney(o.total_amount)}</td>
-                                                <td>
+                                                <td data-label="Ngày Đặt">{formatDate(o.created_at)}</td>
+                                                <td data-label="Tổng tiền" className="fw-bold text-primary">{formatMoney(o.total_amount)}</td>
+                                                <td data-label="Trạng thái">
                                                     {o.status === 'pending' && <span className="badge bg-secondary">Đã tiếp nhận</span>}
                                                     {o.status === 'delivering' && <span className="badge bg-info">Đang giao</span>}
                                                     {o.status === 'completed' && <span className="badge bg-success">Hoàn thành</span>}
                                                 </td>
-                                                <td className="text-center">
+                                                <td data-label="Chi tiết" className="text-center">
                                                     <button 
                                                         className="btn btn-sm btn-outline-primary fw-bold text-nowrap"
                                                         onClick={() => navigate(`/tracking/${o.id}`)}

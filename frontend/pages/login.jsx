@@ -40,6 +40,14 @@ export default function Login() {
         // Nhân viên -> Đá thẳng ra quầy bán hàng
         navigate("/sales");
       }
+      else if (userRole === "ketoan") {
+        // 💰 Kế toán -> Chở thẳng vào trang Lịch sử giao dịch (hoặc /dashboard)
+        navigate("/invoices");
+      }
+      else if (userRole === "sanxuat") {
+        // 🏭 Sản xuất -> Chở thẳng vào kho Sản phẩm / NVL
+        navigate("/products");
+      }
       else if (userRole === "customer") {
         // Khách hàng -> Đẩy ra mặt tiền mua nước
         navigate("/");
@@ -135,12 +143,12 @@ export default function Login() {
               </div>
             </div>
             {/* THÊM NÚT ĐĂNG KÝ CHO KHÁCH HÀNG MỚI */}
-            <div className="text-center mt-3">
+            {/* <div className="text-center mt-3">
               <span className="text-muted small">Chưa có tài khoản? </span>
               <a href="/register" className="text-primary fw-bold text-decoration-none small">
                 Đăng ký ngay
               </a>
-            </div>
+            </div> */}
           </form>
         </div>
       </div>

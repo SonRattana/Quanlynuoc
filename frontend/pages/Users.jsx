@@ -17,7 +17,7 @@ function Users() {
     const [editForm, setEditForm] = useState({ id: null, username: "", email: "", password: "", role: "user" });
     const [showEdit, setShowEdit] = useState(false);
 
-   const fetchUsers = async () => {
+    const fetchUsers = async () => {
         try {
             // Nhớ thêm ?page=${page}&limit=10 vào link
             const res = await api.get(`api/users?page=${page}&limit=10`, {
@@ -92,48 +92,50 @@ function Users() {
     return (
         <Layout>
             {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-            
+
             <div className="container-fluid pt-4 px-2 px-md-4 pb-5">
                 {/* Form Thêm Mới */}
                 <div className="bg-white p-3 p-md-4 shadow-sm rounded mb-4 w-100 overflow-hidden">
                     <h5 className="fw-bold mb-3">Thêm nhân viên mới</h5>
                     <form onSubmit={handleAdd} className="row g-2 g-md-3 align-items-center">
                         <div className="col-12 col-md-2">
-                            <input 
-                                className="form-control" 
-                                placeholder="Tên đăng nhập" 
-                                value={form.username} 
-                                onChange={(e) => setForm({...form, username: e.target.value})} 
-                                required 
+                            <input
+                                className="form-control"
+                                placeholder="Tên đăng nhập"
+                                value={form.username}
+                                onChange={(e) => setForm({ ...form, username: e.target.value })}
+                                required
                             />
                         </div>
                         <div className="col-12 col-md-3">
-                            <input 
-                                type="email" 
-                                className="form-control" 
-                                placeholder="Email" 
-                                value={form.email} 
-                                onChange={(e) => setForm({...form, email: e.target.value})} 
-                                required 
+                            <input
+                                type="email"
+                                className="form-control"
+                                placeholder="Email"
+                                value={form.email}
+                                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                                required
                             />
                         </div>
                         <div className="col-12 col-md-3">
-                            <input 
-                                type="password" 
-                                className="form-control" 
-                                placeholder="Mật khẩu" 
-                                value={form.password} 
-                                onChange={(e) => setForm({...form, password: e.target.value})} 
-                                required 
+                            <input
+                                type="password"
+                                className="form-control"
+                                placeholder="Mật khẩu"
+                                value={form.password}
+                                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                                required
                             />
                         </div>
                         <div className="col-12 col-md-2">
-                            <select 
-                                className="form-select border-info" 
-                                value={form.role} 
-                                onChange={(e) => setForm({...form, role: e.target.value})}
+                            <select
+                                className="form-select border-info fw-bold"
+                                value={form.role}
+                                onChange={(e) => setForm({ ...form, role: e.target.value })}
                             >
                                 <option value="user">Nhân viên (User)</option>
+                                <option value="ketoan">Kế toán</option>
+                                <option value="sanxuat">Sản xuất</option>
                                 <option value="admin">Quản lý (Admin)</option>
                             </select>
                         </div>
@@ -147,7 +149,7 @@ function Users() {
                 <div className="bg-white p-3 p-md-4 shadow-sm rounded w-100">
                     <h5 className="fw-bold mb-3">Danh sách tài khoản</h5>
                     <div className="table-responsive">
-                        <table className="table table-hover align-middle mb-0 text-nowrap">
+                        <table className="table table-hover align-middle mb-0 text-nowrap table-mobile-cards">
                             <thead className="table-light">
                                 <tr>
                                     <th>ID</th>
@@ -160,16 +162,21 @@ function Users() {
                             <tbody>
                                 {users.map(u => (
                                     <tr key={u.id}>
-                                        <td>{u.id}</td>
-                                        <td className="fw-bold">{u.username}</td>
-                                        <td>{u.email}</td>
-                                        <td>
-                                            {u.role === 'admin' ? 
-                                                <span className="badge bg-danger">Quản lý</span> : 
+                                        <td data-label="ID">{u.id}</td>
+                                        <td data-label="Tên Đăng Nhập"className="fw-bold">{u.username}</td>
+                                        <td data-label="Email">{u.email}</td>
+                                        <td data-label="Role">
+                                            {u.role === 'admin' ? (
+                                                <span className="badge bg-danger">Quản lý</span>
+                                            ) : u.role === 'ketoan' ? (
+                                                <span className="badge bg-success">Kế toán</span>
+                                            ) : u.role === 'sanxuat' ? (
+                                                <span className="badge bg-warning text-dark">Sản xuất</span>
+                                            ) : (
                                                 <span className="badge bg-secondary">Nhân viên</span>
-                                            }
+                                            )}
                                         </td>
-                                        <td className="text-center">
+                                        <td data-label="Thao tác" className="text-center">
                                             <button className="btn btn-sm btn-warning me-2" onClick={() => openEditMode(u)}>Sửa</button>
                                             <button className="btn btn-sm btn-danger" onClick={() => handleDelete(u.id)}>Xóa</button>
                                         </td>
@@ -195,22 +202,24 @@ function Users() {
                                 <div className="modal-body">
                                     <div className="mb-3">
                                         <label className="form-label">Tên đăng nhập</label>
-                                        <input className="form-control" value={editForm.username} onChange={e => setEditForm({...editForm, username: e.target.value})} required />
+                                        <input className="form-control" value={editForm.username} onChange={e => setEditForm({ ...editForm, username: e.target.value })} required />
                                     </div>
                                     <div className="mb-3">
                                         <label className="form-label">Email</label>
-                                        <input type="email" className="form-control" value={editForm.email} onChange={e => setEditForm({...editForm, email: e.target.value})} required />
+                                        <input type="email" className="form-control" value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} required />
                                     </div>
                                     <div className="mb-3">
-                                        <label className="form-label">Quyền hạn (Role)</label>
-                                        <select className="form-select" value={editForm.role} onChange={e => setEditForm({...editForm, role: e.target.value})}>
-                                            <option value="user">Nhân viên (User)</option>
+                                        <label className="form-label fw-bold">Quyền hạn (Role)</label>
+                                        <select className="form-select fw-bold" value={editForm.role} onChange={e => setEditForm({ ...editForm, role: e.target.value })}>
+                                            <option value="user">Nhân Viên (User)</option>
+                                            <option value="ketoan">Kế toán</option>
+                                            <option value="sanxuat">Sản xuất</option>
                                             <option value="admin">Quản lý (Admin)</option>
                                         </select>
                                     </div>
                                     <div className="mb-3">
                                         <label className="form-label text-danger">Mật khẩu mới (Bỏ trống nếu không đổi)</label>
-                                        <input type="password" className="form-control" placeholder="***" value={editForm.password} onChange={e => setEditForm({...editForm, password: e.target.value})} />
+                                        <input type="password" className="form-control" placeholder="***" value={editForm.password} onChange={e => setEditForm({ ...editForm, password: e.target.value })} />
                                     </div>
                                 </div>
                                 <div className="modal-footer">

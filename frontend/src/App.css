@@ -5,15 +5,18 @@
   width: 100%;
   min-height: 100vh;
 }
+
 .logo {
   height: 6em;
   padding: 1.5em;
   will-change: filter;
   transition: filter 300ms;
 }
+
 .logo:hover {
   filter: drop-shadow(0 0 2em #646cffaa);
 }
+
 .logo.react:hover {
   filter: drop-shadow(0 0 2em #61dafbaa);
 }
@@ -22,6 +25,7 @@
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }
@@ -50,7 +54,8 @@ body {
    2. GIAO DIỆN DESKTOP (Máy tính) - Giữ nguyên của anh
 ========================================================== */
 .content {
-  margin-left: 260px; /* Chừa 260px bên trái cho Sidebar */
+  margin-left: 260px;
+  /* Chừa 260px bên trái cho Sidebar */
 }
 
 .sidebar {
@@ -105,8 +110,9 @@ body {
   cursor: pointer;
   transition: 0.2s;
   text-decoration: none;
-  color: #0584be; /* Thêm màu chữ mặc định để không bị lỗi link xanh */
-  
+  color: #0584be;
+  /* Thêm màu chữ mặc định để không bị lỗi link xanh */
+
 }
 
 .menu-item i {
@@ -129,65 +135,130 @@ body {
 }
 
 /* ==========================================================
-   3. GIAO DIỆN MOBILE (Điện thoại < 768px) - THÊM MỚI
+   3. TỐI ƯU HIỂN THỊ CÁC BẢNG & FORM TRÊN MOBILE (CHUẨN 100%)
 ========================================================== */
 @media (max-width: 768px) {
-  
-  /* Trả lại không gian cho nội dung, đẩy lên 80px để không bị Menu đè mất */
-  .content {
-    margin-left: 0; 
-    padding-bottom: 80px; 
+
+  /* 1. Bóp vừa khít mọi khung bọc ngoài, chừa lại lề 10px để form thở */
+  .container,
+  .container-fluid,
+  .pt-4.px-4.pb-5,
+  .pt-4.px-4.w-100.pb-5 {
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+    padding-top: 15px !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    width: 100% !important;
+    /* 💡 QUAN TRỌNG: 100% chứ KHÔNG dùng 100vw */
+    max-width: 100% !important;
+    box-sizing: border-box !important;
   }
 
-  /* Biến Sidebar thành thanh Bottom Navigation */
-  .sidebar {
-    width: 100%;
-    height: 70px;
-    top: auto;
-    bottom: 0;
-    padding: 5px 10px;
-    display: flex;
-    flex-direction: row;
-    box-shadow: 0 -4px 10px rgba(0,0,0,0.05); /* Tạo bóng đổ lên trên */
+  /* ==========================================================
+     ÉP CÁI KHUNG BỰ RA SÁT LỀ (TRỊ THẰNG p-4 BỌC NGOÀI)
+  ========================================================== */
+
+  /* 1. Diệt cái mảng màu xanh lá cây (padding) của thẻ div bọc ngoài cùng */
+  .content>.p-4 {
+    padding-left: 5px !important;
+    padding-right: 5px !important;
+    padding-top: 15px !important;
   }
 
-  /* Giấu phần Logo và User Info cho gọn */
-  .sidebar .logo,
-  .sidebar .user-box {
-    display: none;
+  /* 2. Nới rộng cái khung trắng (Card) ra hết cỡ, ép lề trong mỏng lại */
+  .bg-white.p-4,
+  .bg-white.p-5 {
+    padding: 15px 10px !important;
+    margin-bottom: 15px !important;
+    width: 100% !important;
   }
 
-  /* Dàn ngang các nút bấm menu */
-  .sidebar .menu {
-    margin-top: 0;
-    display: flex;
-    flex-direction: row;
-    width: 100%;
-    justify-content: space-around; /* Căn đều khoảng cách */
-    align-items: center;
+  /* 2. Khung Card bóp gọn lại và giữ bo góc nhẹ */
+  .card {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    border-radius: 8px !important;
   }
 
-  /* Sắp xếp Icon nằm trên, Chữ nằm dưới */
-  .sidebar .menu-item {
-    flex-direction: column;
-    justify-content: center;
-    margin-bottom: 0;
-    padding: 5px;
-    font-size: 11px; /* Thu nhỏ chữ */
+  /* 3. Canh chỉnh lại khoảng cách bên trong form cho đỡ tốn diện tích */
+  .card-body,
+  .p-4,
+  .p-5 {
+    padding: 15px !important;
+  }
+
+  /* 4. CHỈ CÓ BẢNG MỚI ĐƯỢC LƯỚT NGANG */
+  .table-responsive {
+    width: 100% !important;
+    margin: 0 !important;
+    border: none !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    /* Lướt mượt trên iPhone */
+  }
+
+  /* 5. Chữ trong bảng không rớt dòng và cách mép một chút */
+  .table td,
+  .table th {
+    white-space: nowrap !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+
+  /* 6. Giãn các nút bấm cho ngón tay dễ chạm */
+  .btn {
+    margin-bottom: 5px;
+  }
+
+  /* ==========================================================
+     BIẾN BẢNG THÀNH DẠNG THẺ (CARD VIEW) TRÊN ĐIỆN THOẠI
+  ========================================================== */
+
+  /* Chỉ áp dụng cho bảng nào sếp gắn class 'table-mobile-cards' */
+  .table-mobile-cards thead {
+    display: none !important;
+    /* Giấu cục tiêu đề ngang đi */
+  }
+
+  .table-mobile-cards tbody tr {
+    display: block;
+    margin-bottom: 15px;
+    border: 1px solid #dee2e6;
     border-radius: 12px;
-    flex: 1; /* Cho các nút chia đều kích thước */
-    text-align: center;
+    padding: 10px;
+    background: #fff;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    /* Tạo bóng đổ 3D cực xịn */
   }
 
-  /* Canh giữa Icon */
-  .sidebar .menu-item i {
-    margin-right: 0;
-    margin-bottom: 4px;
-    font-size: 20px;
+  .table-mobile-cards tbody td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border: none;
+    padding: 10px 5px !important;
+    border-bottom: 1px dashed #eee;
+    white-space: normal !important;
+    text-align: right;
+    /* Ép nội dung dạt sang phải */
   }
 
-  /* Ghi đè lại nút Logout trên điện thoại cho đều hàng */
-  .sidebar .logout {
-    margin-top: 0;
+  /* Ẩn cái gạch dưới ở dòng cuối cùng của mỗi thẻ */
+  .table-mobile-cards tbody td:last-child {
+    border-bottom: none;
+  }
+
+  /* 💡 Tự động sinh ra tiêu đề nằm bên trái */
+  .table-mobile-cards tbody td::before {
+    content: attr(data-label);
+    /* Lấy chữ từ thẻ HTML đắp vào */
+    font-weight: bold;
+    color: #555;
+    text-align: left;
+    flex-shrink: 0;
+    margin-right: 15px;
   }
 }

@@ -33,7 +33,7 @@ function CustomerDetailModal({ customer, depositInfo, onClose }) {
                             <h6 className="mt-3">
                                 Tổng tiền cọc: {totalDeposit.toLocaleString()} đ
                             </h6>
-                            <table className="table table-bordered">
+                            <table className="table table-bordered table-mobile-cards">
                                 <thead>
                                     <tr>
                                         <th>Sản phẩm</th>
@@ -53,9 +53,9 @@ function CustomerDetailModal({ customer, depositInfo, onClose }) {
 
                                     {depositInfo.map((d, i) => (
                                         <tr key={i}>
-                                            <td>{d.name}</td>
-                                            <td>{d.bottles}</td>
-                                            <td>
+                                            <td data-label="Sản phẩm">{d.name}</td>
+                                            <td data-label="Số vỏ">{d.bottles}</td>
+                                            <td data-label="Tiền cọc">
                                                 {Number(d.deposit_money).toLocaleString()} đ
                                             </td>
                                         </tr>

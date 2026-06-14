@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import Layout from "../components/Layout"
+import Layout from "../components/layout"
 import Pagination from "../components/Pagination";
 import Toast from "../components/Toast";
 
@@ -46,7 +46,7 @@ function SystemLogs() {
                     <h4 className="fw-bold mb-4 text-danger"><i className="fa fa-user-secret me-2"></i>Nhật ký hệ thống (Audit Logs)</h4>
                     
                     <div className="table-responsive">
-                        <table className="table table-hover align-middle table-bordered">
+                        <table className="table table-hover align-middle table-bordered table-mobile-cards">
                             <thead className="table-dark">
                                 <tr>
                                     <th>Thời gian</th>
@@ -62,18 +62,18 @@ function SystemLogs() {
                             <tbody>
                                 {logs.length > 0 ? logs.map((log) => (
                                     <tr key={log.id}>
-                                        <td className="text-nowrap">{formatDate(log.created_at)}</td>
-                                        <td>{log.user_id || "Khách"}</td>
-                                        <td>{log.email || "N/A"}</td>
-                                        <td>
+                                        <td data-label="Thời gian" className="text-nowrap">{formatDate(log.created_at)}</td>
+                                        <td data-label="User ID">{log.user_id || "Khách"}</td>
+                                        <td data-label="Email">{log.email || "N/A"}</td>
+                                        <td data-label="Hành Động">
                                             <span className={`badge ${log.action.includes('DELETE') ? 'bg-danger' : log.action.includes('UPDATE') ? 'bg-warning text-dark' : 'bg-success'}`}>
                                                 {log.action}
                                             </span>
                                         </td>
-                                        <td><code>{log.entity_table}</code></td>
-                                        <td>{log.description}</td>
-                                        <td>{log.ip_address}</td>
-                                        <td className="text-center">
+                                        <td data-label="Bảng"><code>{log.entity_table}</code></td>
+                                        <td data-label="Mô Tả">{log.description}</td>
+                                        <td data-label="IP Address"> {log.ip_address}</td>
+                                        <td data-label="Chi Tiết" className="text-center">
                                             <button 
                                                 className="btn btn-sm btn-outline-info"
                                                 onClick={() => setSelectedLog(log)}

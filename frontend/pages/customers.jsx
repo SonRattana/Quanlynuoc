@@ -1,41 +1,58 @@
 import { useEffect, useState } from "react";
-import axios from "axios";
 import React from "react";
-import Layout from "../components/Layout";
+import Layout from "../components/layout";
 import Toast from "../components/Toast";
 import CustomersTable from "../components/customerstable";
 import DepositModal from "../components/depositModal";
 import api from "../src/utils/axios";
 import CustomerDetailModal from "../components/CustomerDetailModal";
+import PayDebtModal from "../components/PayDebtModal";
 
 export default function Customers() {
   const [customers, setCustomers] = useState([]);
+  const [selectedCustomerForDebt, setSelectedCustomerForDebt] = useState(null);
+  
+  const [searchKeyword, setSearchKeyword] = useState("");
+  const [filterAddress, setFilterAddress] = useState("");
+  const [filterType, setFilterType] = useState("");
+  const [filterDelivery, setFilterDelivery] = useState("");
+
   const [form, setForm] = useState({
     name: "",
+    email: "",
     phone: "",
     address: "",
-    type: "le"
+    type: "le",
+    delivery_method: "giao_hang"
   });
+
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [showEdit, setShowEdit] = useState(false);
   const [editForm, setEditForm] = useState({
     id: "",
     name: "",
+    email: "",
     phone: "",
     address: "",
-    type: "le"
+    type: "le",
+    delivery_method: "giao_hang"
   });
+
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const limit = 10;
+
   const openEdit = (customer) => {
-    setEditForm(customer);
+    setEditForm({
+      ...customer,
+      delivery_method: customer.delivery_method || "giao_hang"
+    });
     setShowEdit(true);
   };
 
-  // Detail customer
   const [detailCustomer, setDetailCustomer] = useState(null);
   const [depositInfo, setDepositInfo] = useState([]);
+
   const fetchDepositInfo = async (id) => {
     try {
       const res = await api.get(`api/customers/${id}/deposit`);
@@ -44,34 +61,28 @@ export default function Customers() {
       console.error(err);
     }
   };
+
   const openDetail = async (customer) => {
     setDetailCustomer(customer);
     fetchDepositInfo(customer.id);
   };
-  // Validate form
+
   const validateForm = (data) => {
-    if (!data.name.trim()) {
-      return "Tên không được để trống";
+    if (!data.name.trim()) return "Tên không được để trống";
+    if (!data.address.trim()) return "Địa chỉ không được để trống";
+    if (data.email && data.email.trim() !== "") {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(data.email)) {
+        return "Email không đúng định dạng (Ví dụ: abc@gmail.com)";
+      }
     }
-
-    if (!data.address.trim()) {
-      return "Địa chỉ không được để trống";
-    }
-
-    if (!data.phone) {
-      return "SĐT không được để trống";
-    }
-
+    if (!data.phone) return "SĐT không được để trống";
     const phoneRegex = /^0\d{9}$/;
-
     if (!phoneRegex.test(data.phone)) {
       return "SĐT phải là số Việt Nam 10 chữ số và bắt đầu bằng 0";
     }
-
-    return null; // hợp lệ
+    return null;
   };
-
-
 
   const handleUpdate = async (e) => {
     e.preventDefault();
@@ -86,7 +97,6 @@ export default function Customers() {
       setShowEdit(false);
       fetchCustomers();
     } catch (err) {
-      // HIỆN LỖI TRÙNG SĐT KHI SỬA
       const msg = err.response?.data?.message || "Cập nhật thất bại";
       setToast({ message: msg, type: "error" });
     }
@@ -94,7 +104,6 @@ export default function Customers() {
 
   const handleDelete = async (id) => {
     if (!window.confirm("Bạn có chắc muốn xoá khách hàng này?")) return;
-
     try {
       await api.delete(`api/customers/${id}`);
       setToast({ message: "Đã xoá", type: "success" });
@@ -104,11 +113,18 @@ export default function Customers() {
     }
   };
 
-
   const [toast, setToast] = useState(null);
+
   const fetchCustomers = async () => {
     const res = await api.get("api/customers", {
-      params: { page, limit }
+      params: {
+        page,
+        limit,
+        search: searchKeyword,
+        address: filterAddress,
+        type: filterType,
+        delivery_method: filterDelivery
+      }
     });
 
     setCustomers(res.data.rows);
@@ -118,6 +134,20 @@ export default function Customers() {
   useEffect(() => {
     fetchCustomers();
   }, [page]);
+
+  const handleSearchClick = () => {
+    setPage(1);
+    fetchCustomers();
+  };
+
+  const clearFilters = () => {
+    setSearchKeyword("");
+    setFilterAddress("");
+    setFilterType("");
+    setFilterDelivery("");
+    setPage(1);
+    setTimeout(fetchCustomers, 0); 
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -130,15 +160,12 @@ export default function Customers() {
       await api.post("api/customers", form);
       setToast({ message: "Thêm khách hàng thành công", type: "success" });
       fetchCustomers();
-      setForm({ name: "", phone: "", address: "", type: "le" });
+      setForm({ name: "", phone: "", email: "", address: "", type: "le", delivery_method: "giao_hang" });
     } catch (err) {
-      // LẤY THÔNG BÁO LỖI TỪ BACKEND (Ví dụ: "SĐT đã tồn tại")
       const msg = err.response?.data?.message || "Thêm khách hàng thất bại";
       setToast({ message: msg, type: "error" });
     }
   };
-
-
 
   return (
     <Layout>
@@ -149,10 +176,10 @@ export default function Customers() {
           onClose={() => setToast(null)}
         />
       )}
-      <div className="bg-white shadow-sm p-4 mb-4">
-        <h5 className="fw-bold mb-3">Quản lý khách hàng</h5>
+      <div className="bg-white shadow-sm p-4 mb-4 rounded">
+        <h5 className="fw-bold mb-3"><i className="bi bi-person-plus-fill me-2 text-primary"></i>Thêm Khách Hàng</h5>
 
-        <form onSubmit={handleSubmit} className="row g-3">
+        <form onSubmit={handleSubmit} className="row g-2 align-items-center mb-4">
           <div className="col-md-2">
             <input
               className="form-control"
@@ -164,13 +191,20 @@ export default function Customers() {
           </div>
           <div className="col-md-2">
             <input
+              type="email"
+              className="form-control"
+              placeholder="Email (Tùy chọn)"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+            />
+          </div>
+          <div className="col-md-2">
+            <input
               className="form-control"
               placeholder="SĐT"
               value={form.phone}
               onChange={(e) => {
                 const value = e.target.value;
-
-                // Chỉ cho nhập số
                 if (/^\d*$/.test(value)) {
                   setForm({ ...form, phone: value });
                 }
@@ -188,7 +222,7 @@ export default function Customers() {
               required
             />
           </div>
-          <div className="col-md-3">
+          <div className="col-md-2">
             <select
               className="form-select"
               value={form.type}
@@ -200,17 +234,59 @@ export default function Customers() {
               <option value="khoa">Khoa</option>
             </select>
           </div>
-          <div className="col-md-2">
-            <button type="submit" className="btn btn-primary w-100">Thêm</button>
+          <div className="col-12 mt-3 text-end">
+            <button type="submit" className="btn btn-primary px-5 fw-bold shadow-sm">Thêm Khách Hàng</button>
           </div>
         </form>
 
-        <hr />
+        <hr className="text-muted" />
+
+        <div className="bg-light p-3 rounded-3 mb-4 border border-light">
+          <h6 className="fw-bold text-secondary mb-3"><i className="bi bi-funnel-fill me-2"></i>BỘ LỌC TÌM KIẾM</h6>
+          <div className="row g-2">
+            <div className="col-md-3">
+              <input
+                type="text"
+                className="form-control"
+                placeholder="Tìm Tên khách hoặc SĐT..."
+                value={searchKeyword}
+                onChange={(e) => setSearchKeyword(e.target.value)}
+              />
+            </div>
+            <div className="col-md-3">
+              <input
+                type="text"
+                className="form-control"
+                placeholder="Gõ Phường/Đường để lọc địa chỉ..."
+                value={filterAddress}
+                onChange={(e) => setFilterAddress(e.target.value)}
+              />
+            </div>
+            <div className="col-md-2">
+              <select
+                className="form-select"
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+              >
+                <option value="">-- Tất cả loại khách --</option>
+                <option value="le">Khách lẻ</option>
+                <option value="cua_hang">Cửa hàng</option>
+                <option value="doanh_nghiep">Doanh nghiệp</option>
+                <option value="khoa">Khoa</option>
+              </select>
+            </div>
+            <div className="col-md-2 d-flex gap-2">
+              <button className="btn btn-success w-100 fw-bold" onClick={handleSearchClick}>Lọc</button>
+              <button className="btn btn-outline-secondary w-100 fw-bold" onClick={clearFilters}>Xóa</button>
+            </div>
+          </div>
+        </div>
 
         <CustomersTable
           customers={customers}
           onEdit={openEdit}
           onDelete={handleDelete}
+          onPayDebt={(customer) => setSelectedCustomerForDebt(customer)}
           onDeposit={(customer) => setSelectedCustomer(customer)}
           onView={openDetail}
           page={page}
@@ -218,20 +294,29 @@ export default function Customers() {
           setPage={setPage}
         />
 
+        {selectedCustomerForDebt && (
+          <PayDebtModal
+            customer={selectedCustomerForDebt}
+            onClose={() => setSelectedCustomerForDebt(null)}
+            onSuccess={fetchCustomers}
+          />
+        )}
+
+        {/* 💡 Modal Trả vỏ: Sếp đã gọi fetchCustomers vào onSuccess cực kỳ chuẩn xác! */}
         {selectedCustomer && (
           <DepositModal
             customer={selectedCustomer}
             onClose={() => setSelectedCustomer(null)}
-            onSuccess={fetchCustomers}
+            onSuccess={fetchCustomers} 
           />
         )}
+
         <CustomerDetailModal
           customer={detailCustomer}
           depositInfo={depositInfo}
           onClose={() => setDetailCustomer(null)}
         />
 
-        {/* Edit Modal */}
         {showEdit && (
           <>
             <div className="modal fade show d-block">
@@ -248,9 +333,10 @@ export default function Customers() {
 
                   <form onSubmit={handleUpdate}>
                     <div className="modal-body">
-
+                      <th>Tên Khách Hàng</th>
                       <input
                         className="form-control mb-2"
+                        placeholder="Tên khách"
                         value={editForm.name}
                         onChange={(e) =>
                           setEditForm({ ...editForm, name: e.target.value })
@@ -258,14 +344,22 @@ export default function Customers() {
                         required
                       />
 
+                      <th>Email</th>
                       <input
-                        className="form-control"
+                        type="email"
+                        className="form-control mb-2"
+                        placeholder="Email"
+                        value={editForm.email || ""}
+                        onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                      />
+
+                      <th>SĐT</th>
+                      <input
+                        className="form-control mb-2"
                         placeholder="SĐT"
                         value={editForm.phone}
                         onChange={(e) => {
                           const value = e.target.value;
-
-                          // Chỉ cho nhập số
                           if (/^\d*$/.test(value)) {
                             setEditForm({ ...editForm, phone: value });
                           }
@@ -274,17 +368,19 @@ export default function Customers() {
                         required
                       />
 
+                      <th>Địa chỉ</th>
                       <input
                         className="form-control mb-2"
+                        placeholder="Địa chỉ"
                         value={editForm.address}
                         onChange={(e) =>
                           setEditForm({ ...editForm, address: e.target.value })
                         }
                         required
                       />
-
+                      <th>Loại Khách</th>
                       <select
-                        className="form-select"
+                        className="form-select mb-2"
                         value={editForm.type}
                         onChange={(e) =>
                           setEditForm({ ...editForm, type: e.target.value })
@@ -294,6 +390,16 @@ export default function Customers() {
                         <option value="cua_hang">Cửa hàng</option>
                         <option value="doanh_nghiep">Doanh nghiệp</option>
                         <option value="khoa">Khoa</option>
+                      </select>
+
+                      <th>Hình Thức Nhận Hàng</th>
+                      <select
+                        className="form-select border-warning text-dark fw-bold"
+                        value={editForm.delivery_method}
+                        onChange={(e) => setEditForm({ ...editForm, delivery_method: e.target.value })}
+                      >
+                        <option value="giao_hang">🏠 Đặt giao tại nhà</option>
+                        <option value="tu_lay">🏪 Tự đến lấy</option>
                       </select>
 
                     </div>

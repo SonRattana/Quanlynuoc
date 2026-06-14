@@ -1,7 +1,8 @@
 import { useNavigate, useLocation } from "react-router-dom";
 import React, { useState, useEffect } from "react";
 import logo from "../src/public/bvmt-removebg-preview.png";
-
+import axios from "axios";
+import api from "../src/utils/axios";
 import { io } from "socket.io-client";
 const BACKEND_URL = import.meta.env.VITE_BASE_URL || "http://localhost:3000";
 const socket = io(BACKEND_URL);
@@ -12,22 +13,33 @@ function Sidebar() {
     const user = JSON.parse(localStorage.getItem("user")) || {};
 
     const [isOpen, setIsOpen] = useState(false);
-    const [unreadCount, setUnreadCount] = useState(() => {
-        const savedCount = localStorage.getItem("unread_orders");
-        return savedCount ? parseInt(savedCount, 10) : 0;
-    });
 
+    // Khởi tạo là 0, vừa load trang xong API sẽ nạp số thật vào
+    const [unreadCount, setUnreadCount] = useState(0);
+
+    // 1. VỪA LOAD TRANG LÀ CHỌC XUỐNG DB LẤY SỐ ĐƠN TỒN ĐỌNG NGAY
     useEffect(() => {
-        localStorage.setItem("unread_orders", unreadCount);
-    }, [unreadCount]);
+        const fetchPendingCount = async () => {
+            try {
+                // Sếp chú ý đường dẫn API này cho khớp với Route của sếp nhé
+                const res = await axios.get(`api/orders/count-pending`);
+                setUnreadCount(res.data.count);
+            } catch (error) {
+                console.error("Lỗi lấy số đơn chờ:", error);
+            }
+        };
+        fetchPendingCount();
+    }, []);
 
+    // Đóng sidebar trên mobile khi chuyển trang
     useEffect(() => {
         setIsOpen(false);
     }, [location.pathname]);
 
+    // 2. NGỒI HÓNG ĐƠN MỚI TỚI (CỘNG DỒN LÊN MÀ KHÔNG CẦN F5)
     useEffect(() => {
         socket.on("co_don_hang_moi", () => {
-            setUnreadCount(prev => prev + 1);
+            setUnreadCount(prev => prev + 1); // Có đơn nhảy vào là số tự +1
             const audio = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3");
             audio.play().catch(e => console.log("Trình duyệt chặn âm thanh tự động"));
         });
@@ -222,78 +234,156 @@ function Sidebar() {
                     </h3>
                 </div>
 
-                <div className="user-box mb-2 px-3">
-                    <img src="https://i.pravatar.cc/100" alt="user" className="avatar" />
+                <div className="user-box mb-3 mt-2 px-3 d-flex align-items-center">
+                    <img src="https://i.pravatar.cc/100" alt="user" className="avatar me-2" style={{ width: '45px', height: '45px', borderRadius: '50%', border: '2px solid #0d6efd' }} />
                     <div>
-                        <h6>{user?.username || "User"}</h6>
-                        <span className={user?.role === "admin" ? "text-danger fw-bold" : "text-primary"}>
-                            {user?.role === "admin" ? "Quản lý" : "Nhân viên"}
-                        </span>
+                        <h6 className="fw-bold mb-1" style={{ fontSize: '15px' }}>{user?.username || "User"}</h6>
+
+                        {/* 💡 ÉP CỨNG MÀU CHỮ: text-white HOẶC text-dark */}
+                        {user?.role === 'admin' ? (
+                            <span className="badge bg-danger text-white">Quản lý</span>
+                        ) : user?.role === 'ketoan' ? (
+                            <span className="badge bg-success text-white">Kế toán</span>
+                        ) : user?.role === 'sanxuat' ? (
+                            <span className="badge bg-warning text-dark">Sản xuất</span>
+                        ) : (
+                            <span className="badge bg-secondary text-white">Nhân viên</span>
+                        )}
                     </div>
                 </div>
 
                 <div className="menu mt-0 px-2">
-                    <a className={`menu-item ${isActive('/')}`} onClick={() => goTo('/')} style={{ cursor: 'pointer' }}>
+                    {/* <a className={`menu-item ${isActive('/')}`} onClick={() => goTo('/')} style={{ cursor: 'pointer' }}>
                         <i className="fa fa-store text-success me-2"></i> Xem Cửa hàng
                     </a>
 
-                    <hr className="my-2 text-muted opacity-25" />
-                    {/* ========================================== */}
-                    {/* KHU VỰC CHỈ DÀNH CHO SẾP (ADMIN) */}
-                    {/* ========================================== */}
-                    {user?.role === "admin" && (
-                        <>
-                            <hr className="my-2 text-muted opacity-25" />
-                            <a className={`menu-item ${isActive('/dashboard')}`} onClick={() => goTo('/dashboard')} style={{ cursor: 'pointer' }}>
-                                <i className="fa fa-chart-bar me-2"></i> Dashboard
-                            </a>
+                    <hr className="my-2 text-muted opacity-25" /> */}
+                    {/* BẮT CHUẨN ROLE CỦA USER */}
+                    {(() => {
+                        const role = user?.role || "nhanvien";
+                        const isAdmin = role === "admin";
+                        const isKeToan = role === "ketoan";
+                        const isSanXuat = role === "sanxuat";
+                        const isNhanVien = role === "nhanvien";
 
-                            {/* Giấu trang Báo cáo lợi nhuận vào đây */}
-                            <a className={`menu-item ${isActive('/reports')}`} onClick={() => goTo('/reports')} style={{ cursor: 'pointer' }}>
-                                <i className="fa fa-chart-line me-2"></i> Báo cáo Tài chính
-                            </a>
+                        return (
+                            <>
+                                {/* ========================================== */}
+                                {/* 1. KHU VỰC TÀI CHÍNH (Kế toán & Admin)     */}
+                                {/* ========================================== */}
+                                {(isAdmin || isKeToan) && (
+                                    <>
+                                        <div className="text-muted small fw-bold px-3 mb-1 mt-2">💰 TÀI CHÍNH - BÁO CÁO</div>
+                                        <a className={`menu-item ${isActive('/dashboard')}`} onClick={() => goTo('/dashboard')} style={{ cursor: 'pointer' }}>
+                                            <i className="fa fa-chart-bar me-2"></i> Dashboard
+                                        </a>
+                                        <a className={`menu-item ${isActive('/reports')}`} onClick={() => goTo('/reports')} style={{ cursor: 'pointer' }}>
+                                            <i className="fa fa-chart-line me-2"></i> Báo cáo Tài chính
+                                        </a>
+                                        <a className={`menu-item ${isActive('/monthly-costing')}`} onClick={() => goTo('/monthly-costing')} style={{ cursor: 'pointer' }}>
+                                            <i className="fa fa-calculator me-2"></i> Chốt Sổ Giá Vốn
+                                        </a>
+                                        <a className={`menu-item ${isActive('/expenses')}`} onClick={() => goTo('/expenses')} style={{ cursor: 'pointer' }}>
+                                            <i className="fa fa-money-bill me-2"></i> Chi phí Hoạt Động
+                                        </a>
+                                        <hr className="my-2 text-muted opacity-25" />
+                                    </>
+                                )}
 
-                            <a className={`menu-item ${isActive('/products')}`} onClick={() => goTo('/products')} style={{ cursor: 'pointer' }}>
-                                <i className="fa fa-box me-2"></i> Quản lý Sản phẩm
-                            </a>
-                            <a className={`menu-item ${isActive('/stock')}`} onClick={() => goTo('/stock')} style={{ cursor: 'pointer' }}>
-                                <i className="fa fa-warehouse me-2"></i> Nhập/Xuất Kho
-                            </a>
-                            <a className={`menu-item ${isActive('/users')}`} onClick={() => goTo('/users')} style={{ cursor: 'pointer' }}>
-                                <i className="fa fa-user-shield me-2"></i> Quản lý Nhân sự
-                            </a>
-                            <a className={`menu-item ${isActive('/logs')}`} onClick={() => goTo('/logs')} style={{ cursor: 'pointer' }}>
-                                <i className="fa fa-history me-2"></i> Nhật ký hệ thống
-                            </a>
-                        </>
-                    )}
-                    {/* ========================================== */}
-                    {/* KHU VỰC CỦA NHÂN VIÊN VÀ SẾP (XÀI CHUNG) */}
-                    {/* ========================================== */}
+                                {/* ========================================== */}
+                                {/* 2. KHU VỰC SẢN XUẤT - KHO                    */}
+                                {/* ========================================== */}
+                                {(isAdmin || isSanXuat || isKeToan) && (
+                                    <>
+                                        <div className="text-muted small fw-bold px-3 mb-1 mt-2">🏭 SẢN XUẤT - KHO</div>
 
-                    {/* Kéo nút Đơn hàng ra đây cho Nhân viên trực online */}
-                    <a className={`menu-item ${isActive('/orders')}`} onClick={() => goTo('/orders')} style={{ cursor: 'pointer' }}>
-                        <i className="fa fa-clipboard-list me-2"></i> Đơn online
-                        {unreadCount > 0 && (
-                            <span className="badge-notify">{unreadCount}</span>
-                        )}
-                    </a>
+                                        {/* Các mục Kế toán được xem để đối soát */}
+                                        <a className={`menu-item ${isActive('/products')}`} onClick={() => goTo('/products')} style={{ cursor: 'pointer' }}>
+                                            <i className="fa fa-box me-2"></i> Quản lý SP / NVL
+                                        </a>
+                                        <a className={`menu-item ${isActive('/purchases')}`} onClick={() => goTo('/purchases')} style={{ cursor: 'pointer' }}>
+                                            <i className="fa fa-shopping-cart me-2"></i> Nhập Nguyên Vật Liệu
+                                        </a>
 
-                    <a className={`menu-item ${isActive('/sales')}`} onClick={() => goTo('/sales')} style={{ cursor: 'pointer' }}>
-                        <i className="fa fa-file-alt me-2"></i> Bán tại quầy
-                    </a>
-                    <a className={`menu-item ${isActive('/invoices')}`} onClick={() => goTo('/invoices')} style={{ cursor: 'pointer' }}>
-                        <i className="fa fa-file-invoice me-2"></i> Lịch sử giao dịch
-                    </a>
-                    <a className={`menu-item ${isActive('/customers')}`} onClick={() => goTo('/customers')} style={{ cursor: 'pointer' }}>
-                        <i className="fa fa-users me-2"></i> Khách hàng
-                    </a>
+                                        {/* Các mục CHỈ Sản xuất & Admin được làm (Cấu hình & Tạo lệnh) */}
+                                        {(isAdmin || isSanXuat) && (
+                                            <>
+                                                <a className={`menu-item ${isActive('/bomsetup')}`} onClick={() => goTo('/bomsetup')} style={{ cursor: 'pointer' }}>
+                                                    <i className="fa fa-cogs me-2"></i> Cấu hình Công thức
+                                                </a>
+                                                <a className={`menu-item ${isActive('/production')}`} onClick={() => goTo('/production')} style={{ cursor: 'pointer' }}>
+                                                    <i className="fa fa-industry me-2"></i> Lệnh Sản xuất
+                                                </a>
+                                            </>
+                                        )}
 
-                    <hr className="my-3 text-muted opacity-25" />
+                                        {/* Kế toán xem tiếp Lịch sử & Tồn kho */}
+                                        <a className={`menu-item ${isActive('/production-history')}`} onClick={() => goTo('/production-history')} style={{ cursor: 'pointer' }}>
+                                            <i className="fa fa-history me-2"></i> Lịch sử Sản xuất
+                                        </a>
+                                        <a className={`menu-item ${isActive('/stock')}`} onClick={() => goTo('/stock')} style={{ cursor: 'pointer' }}>
+                                            <i className="fa fa-warehouse me-2"></i> Nhập/Xuất Kho
+                                        </a>
+                                        <hr className="my-2 text-muted opacity-25" />
+                                    </>
+                                )}
 
-                    <a className="menu-item logout text-danger fw-bold" onClick={handleLogout} style={{ cursor: 'pointer' }}>
-                        <i className="fa fa-sign-out-alt me-2"></i> Đăng xuất
-                    </a>
+                                {/* ========================================== */}
+                                {/* 3. KHU VỰC BÁN HÀNG                        */}
+                                {/* ========================================== */}
+                                {(isAdmin || isNhanVien || isKeToan) && (
+                                    <>
+                                        <div className="text-muted small fw-bold px-3 mb-1 mt-2">🛒 BÁN HÀNG</div>
+
+                                        {(isAdmin || isNhanVien) && (
+                                            <>
+                                                <a className={`menu-item ${isActive('/sales')}`} onClick={() => goTo('/sales')} style={{ cursor: 'pointer' }}>
+                                                    <i className="fa fa-file-alt me-2"></i> Bán hàng
+                                                </a>
+                                               
+                                            </>
+                                        )}
+
+                                        {/* Kế toán cũng cần xem lịch sử giao dịch để đối soát tiền */}
+                                        <a className={`menu-item ${isActive('/invoices')}`} onClick={() => goTo('/invoices')} style={{ cursor: 'pointer' }}>
+                                            <i className="fa fa-file-invoice me-2"></i> Lịch sử giao dịch
+                                        </a>
+                                        <a className={`menu-item ${isActive('/customers')}`} onClick={() => goTo('/customers')} style={{ cursor: 'pointer' }}>
+                                            <i className="fa fa-users me-2"></i> Khách hàng
+                                        </a>
+                                        <hr className="my-2 text-muted opacity-25" />
+                                    </>
+                                )}
+
+                                {/* ========================================== */}
+                                {/* 4. HỆ THỐNG (Chỉ Admin)                    */}
+                                {/* ========================================== */}
+                                {isAdmin && (
+                                    <>
+                                        <div className="text-muted small fw-bold px-3 mb-1 mt-2">⚙️ HỆ THỐNG</div>
+                                        <a className={`menu-item ${isActive('/users')}`} onClick={() => goTo('/users')} style={{ cursor: 'pointer' }}>
+                                            <i className="fa fa-user-shield me-2"></i> Quản lý Nhân sự
+                                        </a>
+                                        <a className={`menu-item ${isActive('/logs')}`} onClick={() => goTo('/logs')} style={{ cursor: 'pointer' }}>
+                                            <i className="fa fa-shield-alt me-2"></i> Nhật ký hệ thống
+                                        </a>
+                                        <hr className="my-2 text-muted opacity-25" />
+                                    </>
+                                )}
+
+                                {/* ========================================== */}
+                                {/* NÚT CÁ NHÂN & ĐĂNG XUẤT (Ai cũng thấy)     */}
+                                {/* ========================================== */}
+                                <a className={`menu-item fw-bold ${isActive('/change-password')}`} onClick={() => goTo('/change-password')} style={{ cursor: 'pointer' }}>
+                                    <i className="fa fa-key me-2"></i> Đổi mật khẩu
+                                </a>
+
+                                <a className="menu-item logout text-danger fw-bold" onClick={handleLogout} style={{ cursor: 'pointer' }}>
+                                    <i className="fa fa-sign-out-alt me-2"></i> Đăng xuất
+                                </a>
+                            </>
+                        );
+                    })()}
                 </div>
             </div>
         </>
