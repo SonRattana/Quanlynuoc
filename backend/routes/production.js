@@ -121,7 +121,7 @@ router.post("/", verifyToken, async (req, res) => {
 router.get("/history", verifyToken, async (req, res) => {
     try {
         const [rows] = await db.query(`
-            SELECT po.id, p.name AS product_name, po.quantity, po.total_cost, po.unit_cost, po.created_at, po.note
+            SELECT po.id, p.name AS product_name, po.quantity, po.total_cost, po.unit_cost, po.created_at, po.note, po.cost_status
             FROM production_orders po JOIN products p ON po.product_id = p.id ORDER BY po.id DESC
         `);
         res.json(rows);
@@ -204,7 +204,7 @@ router.post("/cost-configs", verifyToken, async (req, res) => {
 router.post("/monthly-costing", verifyToken, async (req, res) => {
     const connection = await db.getConnection();
     try {
-        const { start_date, end_date, total_electric_water, total_labor, total_depreciation } = req.body;
+        const { start_date, end_date, total_electric, total_water, total_labor, total_depreciation } = req.body;
 
         if (!start_date || !end_date) {
             return res.status(400).json({ message: "Vui lòng chọn khoảng thời gian chốt sổ!" });
@@ -212,7 +212,7 @@ router.post("/monthly-costing", verifyToken, async (req, res) => {
 
         await connection.beginTransaction();
 
-        const totalOverhead = Number(total_electric_water) + Number(total_labor) + Number(total_depreciation);
+        const totalOverhead = Number(total_electric) + Number(total_water) + Number(total_labor) + Number(total_depreciation);
 
         // 💡 BƯỚC NGOẶT: Lấy trực tiếp Dữ liệu từ Lệnh Sản Xuất (production_orders)
         const [prodStats] = await connection.query(`
@@ -241,9 +241,9 @@ router.post("/monthly-costing", verifyToken, async (req, res) => {
 
         // Lưu lịch sử Chốt kỳ
         const [monthlyRes] = await connection.query(
-            `INSERT INTO monthly_costings (month, year, start_date, end_date, total_electric_water, total_labor, total_depreciation, created_by) 
-             VALUES (MONTH(?), YEAR(?), ?, ?, ?, ?, ?, ?)`,
-            [start_date, start_date, start_date, end_date, total_electric_water, total_labor, total_depreciation, req.user.id]
+            `INSERT INTO monthly_costings (month, year, start_date, end_date, total_electric, total_water, total_labor, total_depreciation, created_by) 
+             VALUES (MONTH(?), YEAR(?), ?, ?, ?, ?, ?, ?, ?)`,
+            [start_date, start_date, start_date, end_date, total_electric, total_water, total_labor, total_depreciation, req.user.id]
         );
         const costingId = monthlyRes.insertId;
 

@@ -162,33 +162,88 @@ router.get("/details/:id", verifyToken, async (req, res) => {
         res.status(500).json({ message: "Lỗi server" });
     }
 });
-// API: Cập nhật phiếu nhập
+// API: Cập nhật phiếu nhập (PHIÊN BẢN CHUẨN LOGIC ERP - CẬP NHẬT CẢ GIÁ VỐN)
 router.put("/update/:id", verifyToken, async (req, res) => {
     const connection = await db.getConnection();
     try {
         const { id } = req.params;
-        const { supplier_name, invoice_code, total_payment, note, details } = req.body;
+        const { supplier_name, invoice_code, note, details, total_fee_amount, vat_rate } = req.body;
 
         await connection.beginTransaction();
 
-        // Update bảng chính
-        await connection.query("UPDATE purchase_orders SET supplier_name=?, invoice_code=?, total_payment=?, note=? WHERE id=?",
-            [supplier_name, invoice_code, total_payment, note, id]);
+        // 1. TÍNH TOÁN LẠI TỔNG TIỀN PHIẾU NHẬP
+        let total_goods_amount = 0;
+        if (details && details.length > 0) {
+            details.forEach(item => {
+                total_goods_amount += (Number(item.quantity_used) * Number(item.unit_cost));
+            });
+        }
 
-        // Xóa chi tiết cũ và thêm lại chi tiết mới
+        const fee = Number(total_fee_amount) || 0;
+        const rate = Number(vat_rate) || 0;
+        const vat_amount = (total_goods_amount * rate) / 100;
+        const total_payment = total_goods_amount + fee + vat_amount;
+
+        // 2. CẬP NHẬT GIẤY TỜ (BẢNG PHIẾU NHẬP)
+        await connection.query(
+            `UPDATE purchase_orders 
+             SET supplier_name=?, invoice_code=?, total_payment=?, note=?,
+                 total_goods_amount=?, total_fee_amount=?, vat_rate=?, vat_amount=? 
+             WHERE id=?`,
+            [supplier_name, invoice_code, total_payment, note, 
+             total_goods_amount, fee, rate, vat_amount, id]
+        );
+
+        // Xóa chi tiết cũ
         await connection.query("DELETE FROM purchase_order_details WHERE purchase_order_id = ?", [id]);
 
+        // 3. TÍNH TOÁN & CẬP NHẬT LẠI GIÁ VỐN CHO TỪNG SẢN PHẨM
         for (const item of details) {
-            await connection.query("INSERT INTO purchase_order_details (purchase_order_id, material_id, quantity, unit_price) VALUES (?, ?, ?, ?)",
-                [id, item.material_id, item.quantity_used, item.unit_cost]);
+            const qty = Number(item.quantity_used);
+            const price = Number(item.unit_cost);
+
+            // Băm lại phí Ship và Thuế VAT cho từng món
+            let allocatedFeePerUnit = 0;
+            if (total_goods_amount > 0 && fee > 0) {
+                const itemValueRatio = (qty * price) / total_goods_amount;
+                const totalFeeForItem = fee * itemValueRatio;
+                allocatedFeePerUnit = totalFeeForItem / qty;
+            }
+            const vatPerUnit = price * (rate / 100);
+            
+            // 💡 ĐÂY LÀ GIÁ VỐN MỚI CHUẨN XÁC SAU KHI SỬA
+            const finalCostPrice = price + allocatedFeePerUnit + vatPerUnit;
+
+            // Thêm lại chi tiết phiếu
+            await connection.query(
+                "INSERT INTO purchase_order_details (purchase_order_id, product_id, quantity, unit_price) VALUES (?, ?, ?, ?)",
+                [id, item.material_id, qty, price]
+            );
+
+            // 💡 QUAN TRỌNG NHẤT: Chui vào kho, cập nhật lại Giá vốn của cái lô hàng nhập đợt đó
+            await connection.query(
+                `UPDATE inventory_batches 
+                 SET unit_price = ?, allocated_fee = ?, cost_price = ? 
+                 WHERE po_id = ? AND product_id = ?`,
+                [price, allocatedFeePerUnit, finalCostPrice, id, item.material_id]
+            );
+
+            // 💡 ĐỒNG THỜI: Cập nhật giá vốn mới nhất này ra ngoài Danh mục vật tư
+            await connection.query(
+                `UPDATE products SET cost_price = ? WHERE id = ?`,
+                [finalCostPrice, item.material_id]
+            );
         }
 
         await connection.commit();
-        res.json({ message: "Sửa phiếu thành công!" });
+        res.json({ message: "Sửa phiếu và cập nhật lại Giá Vốn toàn hệ thống thành công!" });
     } catch (err) {
         await connection.rollback();
+        console.error("Lỗi cập nhật phiếu nhập:", err);
         res.status(500).json({ message: err.message });
-    } finally { connection.release(); }
+    } finally { 
+        connection.release(); 
+    }
 });
 
 // ================= 3. API LẤY LỊCH SỬ PHIẾU NHẬP =================
