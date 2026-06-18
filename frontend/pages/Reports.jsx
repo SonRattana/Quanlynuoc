@@ -205,24 +205,80 @@ export default function Reports() {
             fileName = `BaoCao_LaiLo_PNL_${startDate}.xlsx`;
         }
         else if (reportType === "revenue") {
-            excelData = data.map((item) => ({
-                "NGÀY": new Date(item.created_at).toLocaleDateString("vi-VN"),
-                "MÃ HĐ": `HD${item.invoice_id}`,
-                "NGƯỜI GIAO": item.shipper_name || "",
-                "KHÁCH HÀNG": item.customer_name || "Khách lẻ",
-                "SĐT": item.phone || "",
-                "ĐỊA CHỈ": item.address || item.customer_address || "",
+            // 1. Dùng processedRevenueData để lấy dữ liệu đã phân nhóm theo Hóa đơn
+            excelData = processedRevenueData.map((item) => ({
+                "MÃ HĐ": item.isFirst ? `HD${item.invoice_id}` : "",
+                "NGÀY": item.isFirst ? new Date(item.created_at).toLocaleDateString("vi-VN") : "",
+                "NGƯỜI GIAO": item.isFirst ? (item.shipper_name || "") : "",
+                "KHÁCH HÀNG": item.isFirst ? (item.customer_name || "Khách lẻ") : "",
+                "SĐT": item.isFirst ? (item.phone || "") : "",
+                "ĐỊA CHỈ": item.isFirst ? (item.address || item.customer_address || "") : "",
                 "Hàng hóa": item.product_name,
-                "SL": Number(item.quantity),
-                "ĐƠN GIÁ": Number(item.sell_price),
-                "THÀNH TIỀN": Number(item.thanh_tien),
+                "ĐVT": item.unit || "",
+                "Số Lượng": Number(item.quantity),
+                "Đơn giá": Number(item.sell_price),
+                "Thành tiền (SP)": Number(item.thanh_tien),
+                "Thế chân (HĐ)": item.isFirst ? Number(item.inv_the_chan || 0) : "",
+                "Tổng tiền HĐ": item.isFirst ? Number(item.inv_tong_tien || 0) : "",
+                "Chưa trả (Vỏ)": item.isFirst ? Number(item.inv_unreturned || 0) : ""
             }));
-            columnWidths = [{ wpx: 100 }, { wpx: 80 }, { wpx: 120 }, { wpx: 150 }, { wpx: 100 }, { wpx: 200 }, { wpx: 150 }, { wpx: 60 }, { wpx: 100 }, { wpx: 120 }];
+
+            // Căn chỉnh lại độ rộng cột cho vừa vặn
+            columnWidths = [
+                { wpx: 80 },  // MÃ HĐ
+                { wpx: 100 }, // NGÀY
+                { wpx: 120 }, // NGƯỜI GIAO
+                { wpx: 150 }, // KHÁCH HÀNG
+                { wpx: 100 }, // SĐT
+                { wpx: 200 }, // ĐỊA CHỈ
+                { wpx: 150 }, // Hàng hóa
+                { wpx: 60 },  // ĐVT
+                { wpx: 80 },  // Số Lượng
+                { wpx: 100 }, // Đơn giá
+                { wpx: 120 }, // Thành tiền
+                { wpx: 120 }, // Thế chân
+                { wpx: 120 }, // Tổng tiền
+                { wpx: 100 }  // Chưa trả vỏ
+            ];
+
             worksheet = XLSX.utils.json_to_sheet(excelData);
-            XLSX.utils.sheet_add_aoa(worksheet, [["TỔNG CỘNG:", "", "", "", "", "", "", "", "", revenueFooterStats.thanh_tien]], { origin: -1 });
+
+            // 💡 THUẬT TOÁN GỘP Ô (MERGE CELLS)
+            const merges = [];
+            let startRow = 1;
+
+            for (let i = 0; i < processedRevenueData.length; i++) {
+                const isLastRow = i === processedRevenueData.length - 1;
+                const nextIsFirst = !isLastRow && processedRevenueData[i + 1].isFirst;
+
+                if (isLastRow || nextIsFirst) {
+                    if (i > startRow - 1) {
+                        // Các cột cần gộp: Mã HĐ(0), Ngày(1), Người giao(2), KH(3), SĐT(4), Địa chỉ(5), Thế chân(11), Tổng tiền(12), Nợ vỏ(13)
+                        const colsToMerge = [0, 1, 2, 3, 4, 5, 11, 12, 13];
+                        colsToMerge.forEach(colIndex => {
+                            merges.push({
+                                s: { r: startRow, c: colIndex },
+                                e: { r: i + 1, c: colIndex }
+                            });
+                        });
+                    }
+                    startRow = i + 2;
+                }
+            }
+
+            worksheet['!merges'] = merges;
+
+            // 💡 THÊM DÒNG TỔNG CỘNG VÀO CUỐI BẢNG
+            XLSX.utils.sheet_add_aoa(worksheet, [["TỔNG CỘNG TOÀN KỲ:", "", "", "", "", "", "", "", "", "", revenueFooterStats.thanh_tien, revenueFooterStats.the_chan, revenueFooterStats.tong_tien, revenueFooterStats.unreturned]], { origin: -1 });
+
+            // Gộp ô chữ "TỔNG CỘNG TOÀN KỲ:" từ cột 0 đến cột 9 cho đẹp
+            const totalRowIndex = processedRevenueData.length + 1;
+            merges.push({ s: { r: totalRowIndex, c: 0 }, e: { r: totalRowIndex, c: 9 } });
+
             fileName = `SoChiTietBanHang_${startDate}.xlsx`;
         }
         else if (reportType === "actual_revenue") {
+            // 1. Vẫn xuất dữ liệu như cũ
             excelData = processedRevenueData.map((item) => ({
                 "NGÀY": item.isFirst ? new Date(item.created_at).toLocaleDateString("vi-VN") : "",
                 "MÃ HĐ": item.isFirst ? `HD${item.invoice_id}` : "",
@@ -239,9 +295,44 @@ export default function Reports() {
                 "Công Nợ Tiền": item.isFirst ? Number(item.inv_debt || 0) : "",
                 "Nợ Vỏ Thực Tế": item.isFirst ? Number(item.inv_actual_debt || 0) : ""
             }));
+
             columnWidths = [{ wpx: 100 }, { wpx: 80 }, { wpx: 150 }, { wpx: 100 }, { wpx: 200 }, { wpx: 150 }, { wpx: 60 }, { wpx: 100 }, { wpx: 120 }, { wpx: 120 }, { wpx: 120 }, { wpx: 120 }, { wpx: 120 }, { wpx: 100 }];
             worksheet = XLSX.utils.json_to_sheet(excelData);
+
+            // 💡 THUẬT TOÁN GỘP Ô (MERGE CELLS) TỰ ĐỘNG
+            const merges = [];
+            let startRow = 1; // Excel bắt đầu từ dòng 0 (Header), nên dòng dữ liệu đầu tiên là 1
+
+            for (let i = 0; i < processedRevenueData.length; i++) {
+                const isLastRow = i === processedRevenueData.length - 1;
+                const nextIsFirst = !isLastRow && processedRevenueData[i + 1].isFirst;
+
+                // Nếu đến dòng cuối của 1 hóa đơn (chuẩn bị sang hóa đơn mới hoặc hết bảng)
+                if (isLastRow || nextIsFirst) {
+                    if (i > startRow - 1) { // Chỉ gộp nếu hóa đơn đó có từ 2 sản phẩm trở lên
+                        // Danh sách Cột cần gộp (Ngày, Mã HĐ, KH, SĐT, Địa chỉ, Thế chân, Tổng tiền, Thực thu, Công nợ, Nợ vỏ)
+                        const colsToMerge = [0, 1, 2, 3, 4, 9, 10, 11, 12, 13];
+                        colsToMerge.forEach(colIndex => {
+                            merges.push({
+                                s: { r: startRow, c: colIndex }, // Ô bắt đầu (Start)
+                                e: { r: i + 1, c: colIndex }     // Ô kết thúc (End)
+                            });
+                        });
+                    }
+                    startRow = i + 2; // Dời cọc mốc bắt đầu sang hóa đơn tiếp theo
+                }
+            }
+
+            // Gắn lệnh gộp ô vào worksheet
+            worksheet['!merges'] = merges;
+
+            // 💡 THÊM DÒNG TỔNG CỘNG VÀ GỘP NÓ LẠI CHO ĐẸP
             XLSX.utils.sheet_add_aoa(worksheet, [["TỔNG CỘNG:", "", "", "", "", "", "", "", "", revenueFooterStats.actual_deposit, revenueFooterStats.inv_total, revenueFooterStats.inv_paid, revenueFooterStats.inv_debt, revenueFooterStats.actual_debt]], { origin: -1 });
+
+            // Ép gộp ô chữ "TỔNG CỘNG:" kéo dài từ cột 0 đến cột 8
+            const totalRowIndex = processedRevenueData.length + 1;
+            merges.push({ s: { r: totalRowIndex, c: 0 }, e: { r: totalRowIndex, c: 8 } });
+
             fileName = `DoanhThu_ThucTe_${startDate}.xlsx`;
         }
         else if (reportType === "revenue_by_product") {
@@ -254,8 +345,11 @@ export default function Reports() {
             columnWidths = [{ wpx: 200 }, { wpx: 120 }, { wpx: 100 }, { wpx: 150 }];
             const totalQty = data.reduce((sum, item) => sum + Number(item.total_quantity), 0);
             const totalRev = data.reduce((sum, item) => sum + Number(item.total_revenue), 0);
+
             worksheet = XLSX.utils.json_to_sheet(excelData);
-            XLSX.utils.sheet_add_aoa(worksheet, [["TỔNG CỘNG:", "", totalQty, totalRev]], { origin: -1 });
+            // Thêm dòng Tổng và gộp ô
+            XLSX.utils.sheet_add_aoa(worksheet, [["TỔNG BÁN RA:", "", totalQty, totalRev]], { origin: -1 });
+            worksheet['!merges'] = [{ s: { r: data.length + 1, c: 0 }, e: { r: data.length + 1, c: 1 } }];
             fileName = `BaoCao_DoanhThu_TheoSP_${startDate}.xlsx`;
         }
         else if (reportType === "sales_by_region") {
@@ -269,8 +363,9 @@ export default function Reports() {
             const totalOrders = data.reduce((sum, item) => sum + Number(item.total_orders), 0);
             const totalProducts = data.reduce((sum, item) => sum + Number(item.total_products_sold), 0);
             const totalRev = data.reduce((sum, item) => sum + Number(item.total_revenue), 0);
+
             worksheet = XLSX.utils.json_to_sheet(excelData);
-            XLSX.utils.sheet_add_aoa(worksheet, [["TỔNG CỘNG:", totalOrders, totalProducts, totalRev]], { origin: -1 });
+            XLSX.utils.sheet_add_aoa(worksheet, [["TỔNG CỘNG TOÀN KỲ:", totalOrders, totalProducts, totalRev]], { origin: -1 });
             fileName = `BaoCao_DoanhThu_KhuVuc_${startDate}.xlsx`;
         }
         else if (reportType === "bottles") {
@@ -279,11 +374,17 @@ export default function Reports() {
                 "SĐT": item.phone || "",
                 "Địa chỉ": item.customer_address || item.address || "",
                 "Đã Mượn": Number(item.total_borrowed),
+                "Đã Trả": Number(item.total_returned),
                 "Đang Nợ (Vỏ)": Number(item.remaining_bottles),
                 "Tiền Cọc (VNĐ)": Number(item.total_deposit)
             }));
-            columnWidths = [{ wpx: 150 }, { wpx: 100 }, { wpx: 200 }, { wpx: 80 }, { wpx: 100 }, { wpx: 120 }];
+            columnWidths = [{ wpx: 150 }, { wpx: 100 }, { wpx: 200 }, { wpx: 80 }, { wpx: 80 }, { wpx: 100 }, { wpx: 120 }];
+            const totalBot = data.reduce((sum, item) => sum + Number(item.remaining_bottles), 0);
+            const totalDep = data.reduce((sum, item) => sum + Number(item.total_deposit), 0);
+
             worksheet = XLSX.utils.json_to_sheet(excelData);
+            XLSX.utils.sheet_add_aoa(worksheet, [["TỔNG ĐANG NỢ:", "", "", "", "", totalBot, totalDep]], { origin: -1 });
+            worksheet['!merges'] = [{ s: { r: data.length + 1, c: 0 }, e: { r: data.length + 1, c: 4 } }];
             fileName = `BaoCao_CongNo_VoBinh.xlsx`;
         }
         else if (reportType === "customers") {
@@ -297,7 +398,12 @@ export default function Reports() {
                 "Tổng tiền": Number(item.total_revenue)
             }));
             columnWidths = [{ wpx: 150 }, { wpx: 100 }, { wpx: 200 }, { wpx: 120 }, { wpx: 120 }, { wpx: 80 }, { wpx: 120 }];
+            const totalOrders = data.reduce((sum, item) => sum + Number(item.total_orders), 0);
+            const totalMoney = data.reduce((sum, item) => sum + Number(item.total_revenue), 0);
+
             worksheet = XLSX.utils.json_to_sheet(excelData);
+            XLSX.utils.sheet_add_aoa(worksheet, [["TỔNG CỘNG:", "", "", "", "", totalOrders, totalMoney]], { origin: -1 });
+            worksheet['!merges'] = [{ s: { r: data.length + 1, c: 0 }, e: { r: data.length + 1, c: 4 } }];
             fileName = `BaoCao_KhachHang_${startDate}.xlsx`;
         }
         else if (reportType === "bottle_notes") {
@@ -310,7 +416,11 @@ export default function Reports() {
                 "Lý do": item.note || ""
             }));
             columnWidths = [{ wpx: 100 }, { wpx: 150 }, { wpx: 150 }, { wpx: 80 }, { wpx: 120 }, { wpx: 200 }];
+            const totalRefund = data.reduce((sum, item) => sum + Number(item.deposit_amount), 0);
+
             worksheet = XLSX.utils.json_to_sheet(excelData);
+            XLSX.utils.sheet_add_aoa(worksheet, [["TỔNG TIỀN ĐÃ HOÀN:", "", "", "", totalRefund, ""]], { origin: -1 });
+            worksheet['!merges'] = [{ s: { r: data.length + 1, c: 0 }, e: { r: data.length + 1, c: 3 } }];
             fileName = `BaoCao_KhauHao_${startDate}.xlsx`;
         }
         else if (reportType === "inventory_products") {
@@ -321,7 +431,12 @@ export default function Reports() {
                 "Tồn Kho": Number(item.current_stock)
             }));
             columnWidths = [{ wpx: 200 }, { wpx: 120 }, { wpx: 120 }, { wpx: 120 }];
+            const totalDebt = data.reduce((sum, item) => sum + Number(item.bottles_with_customers), 0);
+            const totalStock = data.reduce((sum, item) => sum + Number(item.current_stock), 0);
+
             worksheet = XLSX.utils.json_to_sheet(excelData);
+            XLSX.utils.sheet_add_aoa(worksheet, [["TỔNG CỘNG:", "", totalDebt, totalStock]], { origin: -1 });
+            worksheet['!merges'] = [{ s: { r: data.length + 1, c: 0 }, e: { r: data.length + 1, c: 1 } }];
             fileName = `BaoCao_TonKho_SanPham.xlsx`;
         }
         else if (reportType === "inventory_materials") {
@@ -330,7 +445,10 @@ export default function Reports() {
                 "Tồn Kho Thực Tế": Number(item.current_stock)
             }));
             columnWidths = [{ wpx: 250 }, { wpx: 150 }];
+            const totalStock = data.reduce((sum, item) => sum + Number(item.current_stock), 0);
+
             worksheet = XLSX.utils.json_to_sheet(excelData);
+            XLSX.utils.sheet_add_aoa(worksheet, [["TỔNG CỘNG NGUYÊN VẬT LIỆU:", totalStock]], { origin: -1 });
             fileName = `BaoCao_TonKho_NVL.xlsx`;
         }
         else if (reportType === "purchases") {
@@ -345,7 +463,15 @@ export default function Reports() {
                 "Tổng Thanh Toán": Number(item.total_payment)
             }));
             columnWidths = [{ wpx: 100 }, { wpx: 80 }, { wpx: 200 }, { wpx: 120 }, { wpx: 120 }, { wpx: 120 }, { wpx: 120 }, { wpx: 150 }];
+
+            const totalGoods = data.reduce((sum, item) => sum + Number(item.total_goods_amount || 0), 0);
+            const totalVAT = data.reduce((sum, item) => sum + Number(item.vat_amount || 0), 0);
+            const totalFee = data.reduce((sum, item) => sum + Number(item.total_fee_amount || 0), 0);
+            const totalPayment = data.reduce((sum, item) => sum + Number(item.total_payment || 0), 0);
+
             worksheet = XLSX.utils.json_to_sheet(excelData);
+            XLSX.utils.sheet_add_aoa(worksheet, [["TỔNG CỘNG TOÀN KỲ:", "", "", "", totalGoods, totalVAT, totalFee, totalPayment]], { origin: -1 });
+            worksheet['!merges'] = [{ s: { r: data.length + 1, c: 0 }, e: { r: data.length + 1, c: 3 } }];
             fileName = `BaoCao_NhapHang_VAT_${startDate}.xlsx`;
         }
 
@@ -789,9 +915,9 @@ export default function Reports() {
                                 <tr className="bg-dark text-white">
                                     <th>Tổng Doanh Thu (A)</th>
                                     <th>Tổng Giá Vốn Hàng Bán (B)</th>
-                                    <th className="bg-info text-dark">Lợi NHUẬN Chưa Trừ Chi Phí Hoạt Động (C = A - B)</th>
+                                    <th className="bg-info text-dark">Lợi Nhuận Chưa Trừ Chi Phí Hoạt Động (C = A - B)</th>
                                     <th>Chi Phí Hoạt Động (D)</th>
-                                    <th className="bg-success text-white">LỢI NHUẬN RÒNG CUỐI KỲ (E = C - D)</th>
+                                    <th className="bg-success text-white">Lợi Nhuận Ròng (E = C - D)</th>
                                 </tr>
                             )}
                             {(reportType === "revenue" || reportType === "actual_revenue") && (

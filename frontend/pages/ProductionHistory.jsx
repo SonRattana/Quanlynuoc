@@ -218,9 +218,9 @@ export default function ProductionHistory() {
                                     filteredHistory.map((item) => (
                                         <tr key={item.id}>
                                             <td data-label="Mã Lệnh" className="fw-bold text-secondary">#{item.id}</td>
-                                            <td data-label="Sản phẩm" className="small text-muted">{formatDate(item.created_at)}</td>
-                                            <td data-label="Thời Gian" className="text-start fw-bold text-info">{item.note || "---"}</td>
-                                            <td data-label="Ca/ghi chú" className="text-start fw-bold text-primary">{item.product_name}</td>
+                                            <td data-label="Thời Gian" className="small text-muted">{formatDate(item.created_at)}</td>
+                                            <td data-label="Ca/ghi chú" className="text-start fw-bold text-info">{item.note || "---"}</td>
+                                            <td data-label="Sản phẩm" className="text-start fw-bold text-primary">{item.product_name}</td>
                                             <td data-label="SL sản xuất" ><span className="badge bg-primary fs-6">{item.quantity}</span></td>
                                             <td data-label="Giá vốn/ĐV" className="text-end fw-bold text-danger">{formatMoney(item.unit_cost)}</td>
                                             <td data-label="Tổng vốn" className="text-end fw-bold text-danger">{formatMoney(item.total_cost)}</td>

@@ -224,6 +224,65 @@ export default function Purchases() {
                                             <input className="form-control" value={editModal.data.invoice_code || ""}
                                                 onChange={(e) => setEditModal({ ...editModal, data: { ...editModal.data, invoice_code: e.target.value } })} />
                                         </div>
+                                        {/* 💡 SỬA LỖI HIỂN THỊ VAT: Ép kiểu Number() để đưa "8.00" từ DB về số 8 chuẩn */}
+                                        <div className="col-md-2">
+                                            <label className="fw-bold small text-muted">Thuế VAT (%):</label>
+                                            <select
+                                                className="form-select fw-bold text-info"
+                                                value={Number(editModal.data.vat_rate) || 0}
+                                                onChange={(e) => {
+                                                    const newVatRate = Number(e.target.value);
+                                                    const currentTotalGoods = editModal.details ? editModal.details.reduce((sum, item) => sum + (item.quantity_used * item.unit_cost), 0) : (editModal.data.total_goods_amount || 0);
+                                                    const currentFee = editModal.data.total_fee_amount || 0;
+
+                                                    const newVatAmount = (currentTotalGoods * newVatRate) / 100;
+
+                                                    setEditModal({
+                                                        ...editModal,
+                                                        data: {
+                                                            ...editModal.data,
+                                                            vat_rate: newVatRate,
+                                                            vat_amount: newVatAmount,
+                                                            total_payment: currentTotalGoods + currentFee + newVatAmount
+                                                        }
+                                                    });
+                                                }}
+                                            >
+                                                <option value="0">0%</option>
+                                                <option value="5">5%</option>
+                                                <option value="8">8%</option>
+                                                <option value="10">10%</option>
+                                            </select>
+                                            <div className="text-info mt-1 fw-bold text-end" style={{ fontSize: '12px' }}>
+                                                + {formatInputNumber(editModal.data.vat_amount || 0)} đ
+                                            </div>
+                                        </div>
+
+                                        {/* 💡 Ô PHÍ SHIP CŨNG SẼ TỰ ĐỘNG CỘNG VÀO TỔNG TIỀN */}
+                                        <div className="col-md-2">
+                                            <label className="fw-bold small text-muted">Phí Ship (đ):</label>
+                                            <input
+                                                type="text"
+                                                className="form-control fw-bold text-warning text-end"
+                                                value={formatInputNumber(editModal.data.total_fee_amount || 0)}
+                                                onChange={(e) => {
+                                                    const numericString = String(e.target.value).replace(/[^0-9]/g, "");
+                                                    const newFee = numericString === "" ? 0 : Number(numericString);
+
+                                                    const currentTotalGoods = editModal.details ? editModal.details.reduce((sum, item) => sum + (item.quantity_used * item.unit_cost), 0) : (editModal.data.total_goods_amount || 0);
+                                                    const currentVatAmount = editModal.data.vat_amount || 0;
+
+                                                    setEditModal({
+                                                        ...editModal,
+                                                        data: {
+                                                            ...editModal.data,
+                                                            total_fee_amount: newFee,
+                                                            total_payment: currentTotalGoods + newFee + currentVatAmount
+                                                        }
+                                                    });
+                                                }}
+                                            />
+                                        </div>
                                         <div className="col-md-4">
                                             <label className="fw-bold small text-muted">Tổng tiền thanh toán:</label>
                                             <input
@@ -632,7 +691,7 @@ export default function Purchases() {
                                                                             {poDetails.map(d => (
                                                                                 <tr key={d.id}>
                                                                                     <td data-label="Tên Hàng" className="text-start fw-bold">{d.name}</td>
-                                                                                    <td data-label="Số Lượng"className="fw-bold text-primary">{Number(d.quantity_initial)}</td>
+                                                                                    <td data-label="Số Lượng" className="fw-bold text-primary">{Number(d.quantity_initial)}</td>
                                                                                     <td data-label="Giá Mua Gốc"> {formatMoneyExact(d.unit_price)}</td>
                                                                                     <td data-label="Phí Ship/Cái" className="text-warning">{formatMoneyExact(d.allocated_fee)}</td>
                                                                                     <td data-label="Giá Vốn (Đưa vào Tồn kho)" className="fw-bold text-danger">

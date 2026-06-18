@@ -86,7 +86,12 @@ export default function InvoiceModal({ invoiceId, onClose }) {
 
                         <div className="modal-body p-4" id="printable-invoice" style={{ backgroundColor: '#fff', color: '#000', fontFamily: 'Arial, sans-serif' }}>
                             <div className="hospital-header text-center" style={{ marginBottom: '8px' }}>
-                                <img src={logo} alt="Logo" style={{ maxWidth: '35mm', marginTop: '-12px', marginBottom: '-18px' }} />
+                                <img src={logo} alt="Logo" style={{
+                                    width: '120px',       /* 💡 Ép cứng chiều rộng bằng px, trình duyệt in bill sẽ hiểu chuẩn hơn */
+                                    height: 'auto',       /* 💡 Tự động co giãn chiều cao theo tỷ lệ, không bị méo hình */
+                                    objectFit: 'contain',
+                                    marginBottom: '4px'   /* 💡 Trả lại margin bình thường để không bị lẹm vào chữ */
+                                }} />
                                 <div className="fw-bold" style={{ fontSize: '16px', textTransform: 'uppercase', lineHeight: '1.2' }}>MITAFRESH</div>
                                 <div className="fw-bold" style={{ fontSize: '11px', lineHeight: '1.2', marginTop: '2px' }}>Số 56, Mậu Thân, Khóm 10, P. Trà Vinh, Tỉnh Vĩnh Long</div>
                                 <div className="fw-bold" style={{ fontSize: '11px', lineHeight: '1.2' }}>SĐT: 0824 009 779 - 0973 141 307</div>

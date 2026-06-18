@@ -273,7 +273,7 @@ function Sidebar() {
                                 {/* ========================================== */}
                                 {(isAdmin || isKeToan) && (
                                     <>
-                                        <div className="text-muted small fw-bold px-3 mb-1 mt-2">💰 TÀI CHÍNH - BÁO CÁO</div>
+                                        <div className="text-info small fw-bold px-3 mb-1 mt-2 ">💰 TÀI CHÍNH - BÁO CÁO</div>
                                         <a className={`menu-item ${isActive('/dashboard')}`} onClick={() => goTo('/dashboard')} style={{ cursor: 'pointer' }}>
                                             <i className="fa fa-chart-bar me-2"></i> Dashboard
                                         </a>
@@ -295,11 +295,11 @@ function Sidebar() {
                                 {/* ========================================== */}
                                 {(isAdmin || isSanXuat || isKeToan) && (
                                     <>
-                                        <div className="text-muted small fw-bold px-3 mb-1 mt-2">🏭 SẢN XUẤT - KHO</div>
+                                        <div className="text-info small fw-bold px-3 mb-1 mt-2">🏭 SẢN XUẤT - KHO</div>
 
                                         {/* Các mục Kế toán được xem để đối soát */}
                                         <a className={`menu-item ${isActive('/products')}`} onClick={() => goTo('/products')} style={{ cursor: 'pointer' }}>
-                                            <i className="fa fa-box me-2"></i> Quản lý SP / NVL
+                                            <i className="fa fa-box me-2"></i> Quản lý Sản Phẩm / Nguyên Vật Liệu
                                         </a>
                                         <a className={`menu-item ${isActive('/purchases')}`} onClick={() => goTo('/purchases')} style={{ cursor: 'pointer' }}>
                                             <i className="fa fa-shopping-cart me-2"></i> Nhập Nguyên Vật Liệu
@@ -309,7 +309,7 @@ function Sidebar() {
                                         {(isAdmin || isSanXuat) && (
                                             <>
                                                 <a className={`menu-item ${isActive('/bomsetup')}`} onClick={() => goTo('/bomsetup')} style={{ cursor: 'pointer' }}>
-                                                    <i className="fa fa-cogs me-2"></i> Cấu hình Công thức
+                                                    <i className="fa fa-cogs me-2"></i> Cấu Hình Công Thức Sản Xuất
                                                 </a>
                                                 <a className={`menu-item ${isActive('/production')}`} onClick={() => goTo('/production')} style={{ cursor: 'pointer' }}>
                                                     <i className="fa fa-industry me-2"></i> Lệnh Sản xuất
@@ -333,7 +333,7 @@ function Sidebar() {
                                 {/* ========================================== */}
                                 {(isAdmin || isNhanVien || isKeToan) && (
                                     <>
-                                        <div className="text-muted small fw-bold px-3 mb-1 mt-2">🛒 BÁN HÀNG</div>
+                                        <div className="text-info small fw-bold px-3 mb-1 mt-2">🛒 BÁN HÀNG</div>
 
                                         {(isAdmin || isNhanVien) && (
                                             <>
@@ -360,7 +360,7 @@ function Sidebar() {
                                 {/* ========================================== */}
                                 {isAdmin && (
                                     <>
-                                        <div className="text-muted small fw-bold px-3 mb-1 mt-2">⚙️ HỆ THỐNG</div>
+                                        <div className="text-info small fw-bold px-3 mb-1 mt-2">⚙️ HỆ THỐNG</div>
                                         <a className={`menu-item ${isActive('/users')}`} onClick={() => goTo('/users')} style={{ cursor: 'pointer' }}>
                                             <i className="fa fa-user-shield me-2"></i> Quản lý Nhân sự
                                         </a>
