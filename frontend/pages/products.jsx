@@ -445,14 +445,24 @@ function Products() {
                                         <label className="small text-muted fw-bold mb-1">Tiền cọc vỏ</label>
                                         <input type="number" className="form-control text-warning" placeholder="0" value={addForm.deposit_price} onChange={(e) => setAddForm({ ...addForm, deposit_price: e.target.value })} />
                                     </div>
-                                    <div className="form-check col-md-2">
+                                    <div className="form-check col-md-2 d-flex align-items-center">
                                         <input
                                             type="checkbox"
-                                            className="form-check-input"
+                                            // 💡 Thêm border-2 border-dark để viền ô vuông dày và đen đậm
+                                            className="form-check-input border border-2 border-dark shadow-sm"
+                                            // 💡 Phóng to ô vuông lên 1.3 lần cho dễ bấm
+                                            style={{ transform: "scale(1.3)", cursor: "pointer", marginTop: "0" }}
                                             checked={addForm.requires_deposit === 1}
                                             onChange={(e) => setAddForm({ ...addForm, requires_deposit: e.target.checked ? 1 : 0 })}
+                                            id="check-coc-vo" // Thêm id để xài chung với label
                                         />
-                                        <label className="form-check-label ms-2">Sản phẩm này có cọc vỏ (Bình 20L/5L)</label>
+                                        <label
+                                            className="form-check-label ms-3 fw-bold text-dark"
+                                            htmlFor="check-coc-vo" // Bấm vào chữ nó cũng tự tick vào ô vuông
+                                            style={{ cursor: "pointer" }}
+                                        >
+                                            Sản phẩm này có cọc vỏ (Bình 20L/5L)
+                                        </label>
                                     </div>
                                 </>
                             )}
