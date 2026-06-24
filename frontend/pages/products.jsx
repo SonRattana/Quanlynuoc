@@ -394,9 +394,9 @@ function Products() {
                                     ) : (
                                         <>
                                             <option value="cái">Cái</option>
-                                            <option value="kg">Kg</option>
+                                            {/* <option value="kg">Kg</option>
                                             <option value="cuộn">Cuộn</option>
-                                            <option value="mét">Mét</option>
+                                            <option value="mét">Mét</option> */}
                                         </>
                                     )}
                                 </select>
@@ -507,9 +507,9 @@ function Products() {
                                                 ) : (
                                                     <>
                                                         <option value="cái">Cái</option>
-                                                        <option value="kg">Kg</option>
+                                                        {/* <option value="kg">Kg</option>
                                                         <option value="cuộn">Cuộn</option>
-                                                        <option value="mét">Mét</option>
+                                                        <option value="mét">Mét</option> */}
                                                     </>
                                                 )}
                                             </select>

@@ -10,7 +10,24 @@ const formatDateVN = (date) => {
 
 export default function StockHistory({ stocks, page, totalPages, setPage }) {
     const [selectedTx, setSelectedTx] = useState(null);
+    // KHAI BÁO STATE CHO BỘ LỌC
+    const [searchTerm, setSearchTerm] = useState("");
+    const [filterProduct, setFilterProduct] = useState("");
 
+    // LẤY DANH SÁCH SẢN PHẨM KHÔNG TRÙNG ĐỂ ĐƯA VÀO DROPDOWN LỌC
+    const uniqueProducts = [...new Set(stocks.map(item => item.product_name))].filter(Boolean);
+
+    // THUẬT TOÁN LỌC TỰ ĐỘNG
+    const filteredStocks = stocks.filter(s => {
+        const productName = (s.product_name || "").toLowerCase();
+        const reason = (s.reason || "").toLowerCase();
+        const searchLower = searchTerm.toLowerCase();
+
+        const matchSearch = productName.includes(searchLower) || reason.includes(searchLower);
+        const matchProduct = filterProduct ? s.product_name === filterProduct : true;
+
+        return matchSearch && matchProduct;
+    });
     // 💡 STATE MỚI CHO TABS VÀ DỮ LIỆU CẤP PHÁT
     const [activeTab, setActiveTab] = useState("general");
     const [issueHistory, setIssueHistory] = useState([]);
@@ -26,7 +43,25 @@ export default function StockHistory({ stocks, page, totalPages, setPage }) {
             console.error("Lỗi tải lịch sử cấp phát", error);
         }
     };
+    // KHAI BÁO STATE BỘ LỌC CHO TAB CẤP PHÁT NỘI BỘ
+    const [searchInternal, setSearchInternal] = useState("");
+    const [filterInternal, setFilterInternal] = useState("");
 
+    // LẤY DANH SÁCH SẢN PHẨM KHÔNG TRÙNG CHO DROPDOWN BÊN TAB NỘI BỘ
+    const uniqueInternalProducts = [...new Set((issueHistory || []).map(item => item.product_name))].filter(Boolean);
+
+    // THUẬT TOÁN LỌC TAB NỘI BỘ
+    const filteredIssueHistory = (issueHistory || []).filter(item => {
+        const productName = (item.product_name || "").toLowerCase();
+        const reason = (item.reason || "").toLowerCase();
+        const searchLower = searchInternal.toLowerCase();
+
+        // Tìm theo tên SP hoặc Khoa nhận / Ghi chú
+        const matchSearch = productName.includes(searchLower) || reason.includes(searchLower);
+        const matchProduct = filterInternal ? item.product_name === filterInternal : true;
+
+        return matchSearch && matchProduct;
+    });
     // Tự động gọi hàm lấy dữ liệu khi load Component
     useEffect(() => {
         fetchIssueHistory();
@@ -64,6 +99,40 @@ export default function StockHistory({ stocks, page, totalPages, setPage }) {
                 {activeTab === "general" && (
                     <div className="animate__animated animate__fadeIn">
                         <div className="table-responsive">
+                            {/* 💡 BỘ LỌC TÌM KIẾM NHANH */}
+                            <div className="row mb-3 g-2">
+                                <div className="col-12 col-md-6">
+                                    <div className="input-group shadow-sm">
+                                        <span className="input-group-text bg-primary text-white border-primary">
+                                            <i className="bi bi-search"></i>
+                                        </span>
+                                        <input
+                                            type="text"
+                                            className="form-control border-primary"
+                                            placeholder="Tìm nhanh theo tên SP, NVL hoặc lý do..."
+                                            value={searchTerm}
+                                            onChange={(e) => setSearchTerm(e.target.value)}
+                                        />
+                                        {searchTerm && (
+                                            <button className="btn btn-outline-danger" onClick={() => setSearchTerm("")}>
+                                                <i className="bi bi-x-lg"></i>
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="col-12 col-md-4">
+                                    <select
+                                        className="form-select shadow-sm border-info text-info fw-bold"
+                                        value={filterProduct}
+                                        onChange={(e) => setFilterProduct(e.target.value)}
+                                    >
+                                        <option value="">-- Lọc tất cả Sản phẩm / NVL --</option>
+                                        {uniqueProducts.map((name, idx) => (
+                                            <option key={idx} value={name}>{name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
                             <table className="table table-hover align-middle table-mobile-cards">
                                 <thead className="table-light">
                                     <tr>
@@ -79,44 +148,54 @@ export default function StockHistory({ stocks, page, totalPages, setPage }) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {stocks.map((s) => (
-                                        <tr key={s.id}>
-                                            <td data-label="ID">{s.id}</td>
-                                            <td data-label="Sản Phẩm" className="fw-bold">{s.product_name}</td>
-                                            <td data-label="Kho">
-                                                {s.warehouse_name ? (
-                                                    <span className="badge bg-secondary">{s.warehouse_name}</span>
-                                                ) : (
-                                                    <span className="text-muted small">N/A</span>
-                                                )}
-                                            </td>
-                                            <td data-label="Đến Kho">
-                                                {s.target_warehouse_name ? (
-                                                    <span className="badge bg-secondary">{s.target_warehouse_name}</span>
-                                                ) : (
-                                                    <span className="text-muted small">Xuất hủy hoặc bán</span>
-                                                )}
-                                            </td>
-                                            <td data-label="Lý do" className="text-truncate" style={{ maxWidth: "150px" }} title={s.reason}>
-                                                {s.reason}
-                                            </td>
-                                            <td data-label="Loại">
-                                                <span className={`badge ${s.type === "import" ? "bg-success" : "bg-danger"}`}>
-                                                    {s.type}
-                                                </span>
-                                            </td>
-                                            <td data-label="Số Lượng">{s.quantity}</td>
-                                            <td data-label="Thời Gian">{formatDateVN(s.created_at)}</td>
-                                            <td data-label="Thao Tác" className="text-center">
-                                                <button
-                                                    className="btn btn-sm btn-info text-white shadow-sm"
-                                                    onClick={() => setSelectedTx(s)}
-                                                >
-                                                    Chi tiết
-                                                </button>
+                                    {filteredStocks.length > 0 ? (
+                                        filteredStocks.map((s) => (
+                                            <tr key={s.id}>
+                                                <td data-label="ID">{s.id}</td>
+                                                <td data-label="Sản Phẩm" className="fw-bold">{s.product_name}</td>
+                                                <td data-label="Kho">
+                                                    {s.warehouse_name ? (
+                                                        <span className="badge bg-secondary">{s.warehouse_name}</span>
+                                                    ) : (
+                                                        <span className="text-muted small">N/A</span>
+                                                    )}
+                                                </td>
+                                                <td data-label="Đến Kho">
+                                                    {s.target_warehouse_name ? (
+                                                        <span className="badge bg-secondary">{s.target_warehouse_name}</span>
+                                                    ) : (
+                                                        <span className="text-muted small">Xuất hủy hoặc bán</span>
+                                                    )}
+                                                </td>
+                                                <td data-label="Lý do" className="text-truncate" style={{ maxWidth: "150px" }} title={s.reason}>
+                                                    {s.reason}
+                                                </td>
+                                                <td data-label="Loại">
+                                                    <span className={`badge ${s.type === "import" ? "bg-success" : "bg-danger"}`}>
+                                                        {s.type}
+                                                    </span>
+                                                </td>
+                                                <td data-label="Số Lượng">{s.quantity}</td>
+                                                <td data-label="Thời Gian">{formatDateVN(s.created_at)}</td>
+                                                <td data-label="Thao Tác" className="text-center">
+                                                    <button
+                                                        className="btn btn-sm btn-info text-white shadow-sm"
+                                                        onClick={() => setSelectedTx(s)}
+                                                    >
+                                                        Chi tiết
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    ) : (
+                                        <tr>
+                                            {/* 💡 Sếp đếm xem bảng có bao nhiêu cột thì đổi số colSpan cho khớp (ở đây em đếm là 9 cột) */}
+                                            <td colSpan="9" className="text-center text-muted py-5 bg-light">
+                                                <i className="bi bi-inbox fs-1 d-block mb-3 text-secondary"></i>
+                                                Chưa tìm thấy lịch sử giao dịch nào khớp với bộ lọc!
                                             </td>
                                         </tr>
-                                    ))}
+                                    )}
                                 </tbody>
                             </table>
                         </div>
@@ -196,43 +275,85 @@ export default function StockHistory({ stocks, page, totalPages, setPage }) {
 
                 {/* 🏥 TAB 2: LỊCH SỬ CẤP PHÁT NỘI BỘ */}
                 {activeTab === "internal" && (
-                    <div className="table-responsive animate__animated animate__fadeIn">
-                        <table className="table table-bordered table-hover align-middle shadow-sm text-center table-mobile-cards">
-                            <thead className="table-info">
-                                <tr>
-                                    <th>Thời gian</th>
-                                    <th>Từ Kho</th>
-                                    <th>Sản phẩm</th>
-                                    <th>Số lượng</th>
-                                    <th className="text-end">Tổng giá vốn</th>
-                                    <th className="text-start">Khoa nhận & Ghi chú</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {issueHistory && issueHistory.length > 0 ? (
-                                    issueHistory.map((item) => (
-                                        <tr key={item.id}>
-                                            <td data-label="Thời gian" className="text-muted">{item.created_at}</td>
-                                            <td data-label="Từ Kho" className="fw-bold text-dark">{item.warehouse_name}</td>
-                                            <td data-label="Sản phẩm" className="fw-bold text-primary">{item.product_name}</td>
-                                            <td data-label="Số lượng">
-                                                <span className="badge bg-danger fs-6">-{item.quantity}</span>
-                                            </td>
-                                            <td data-label="Tổng giá vốn" className="text-end fw-bold text-danger">
-                                                {Number(item.total_cost).toLocaleString("vi-VN")} đ
-                                            </td>
-                                            <td data-label="Khoa nhận & Ghi chú" className="text-start fw-bold text-secondary fst-italic">
-                                                {item.reason}
+                    <div className="animate__animated animate__fadeIn">
+
+                        {/* 💡 BỘ LỌC TÌM KIẾM NHANH TAB NỘI BỘ */}
+                        <div className="row mb-3 g-2">
+                            <div className="col-12 col-md-6">
+                                <div className="input-group shadow-sm">
+                                    <span className="input-group-text bg-info text-white border-info">
+                                        <i className="bi bi-search"></i>
+                                    </span>
+                                    <input
+                                        type="text"
+                                        className="form-control border-info"
+                                        placeholder="Tìm nhanh theo tên SP hoặc Khoa nhận / Ghi chú..."
+                                        value={searchInternal}
+                                        onChange={(e) => setSearchInternal(e.target.value)}
+                                    />
+                                    {searchInternal && (
+                                        <button className="btn btn-outline-danger" onClick={() => setSearchInternal("")}>
+                                            <i className="bi bi-x-lg"></i>
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="col-12 col-md-4">
+                                <select
+                                    className="form-select shadow-sm border-info text-info fw-bold"
+                                    value={filterInternal}
+                                    onChange={(e) => setFilterInternal(e.target.value)}
+                                >
+                                    <option value="">-- Lọc tất cả Sản phẩm --</option>
+                                    {uniqueInternalProducts.map((name, idx) => (
+                                        <option key={idx} value={name}>{name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* 💡 BẢNG DỮ LIỆU */}
+                        <div className="table-responsive">
+                            <table className="table table-bordered table-hover align-middle shadow-sm text-center table-mobile-cards">
+                                <thead className="table-info">
+                                    <tr>
+                                        <th>Thời gian</th>
+                                        <th>Từ Kho</th>
+                                        <th>Sản phẩm</th>
+                                        <th>Số lượng</th>
+                                        <th className="text-end">Tổng giá vốn</th>
+                                        <th className="text-start">Khoa nhận & Ghi chú</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {filteredIssueHistory.length > 0 ? (
+                                        filteredIssueHistory.map((item) => (
+                                            <tr key={item.id}>
+                                                <td data-label="Thời gian" className="text-muted">{item.created_at}</td>
+                                                <td data-label="Từ Kho" className="fw-bold text-dark">{item.warehouse_name}</td>
+                                                <td data-label="Sản phẩm" className="fw-bold text-primary">{item.product_name}</td>
+                                                <td data-label="Số lượng">
+                                                    <span className="badge bg-danger fs-6">-{item.quantity}</span>
+                                                </td>
+                                                <td data-label="Tổng giá vốn" className="text-end fw-bold text-danger">
+                                                    {Number(item.total_cost).toLocaleString("vi-VN")} đ
+                                                </td>
+                                                <td data-label="Khoa nhận & Ghi chú" className="text-start fw-bold text-secondary fst-italic">
+                                                    {item.reason}
+                                                </td>
+                                            </tr>
+                                        ))
+                                    ) : (
+                                        <tr>
+                                            <td colSpan="6" className="text-center text-muted py-5 bg-light">
+                                                <i className="bi bi-inbox fs-1 d-block mb-3 text-secondary"></i>
+                                                Chưa có lịch sử cấp phát nào khớp với bộ lọc!
                                             </td>
                                         </tr>
-                                    ))
-                                ) : (
-                                    <tr>
-                                        <td colSpan="6" className="text-muted py-4">Chưa có lịch sử cấp phát nào</td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 )}
 
