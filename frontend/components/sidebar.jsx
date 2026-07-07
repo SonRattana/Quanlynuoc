@@ -113,7 +113,7 @@ function Sidebar() {
                 /* FIX LỖI THANH CUỘN */
                 .sidebar {
                     overflow-y: auto !important; 
-                    padding-bottom: 30px !important; 
+                    padding-bottom: 0px !important; 
                     scrollbar-width: none !important; 
                     -ms-overflow-style: none !important; 
                 }
@@ -185,7 +185,7 @@ function Sidebar() {
                         justify-content: flex-start !important; 
                         align-items: stretch !important;
                         padding-top: 20px !important; 
-                        padding-bottom: 80px !important; 
+                        padding-bottom: 0px !important; 
                         overflow-y: auto !important; 
                     }
                     .sidebar.open { left: 0 !important; }
@@ -226,7 +226,7 @@ function Sidebar() {
 
             <div className={`mobile-overlay ${isOpen ? "show" : ""}`} onClick={() => setIsOpen(false)}></div>
 
-            <div className={`sidebar ${isOpen ? "open" : ""}`}>
+            <div className={`sidebar d-flex flex-column ${isOpen ? "open" : ""}`} style={{ height: "100vh" }}>
                 <div className="logo mb-2 mt-1 px-3">
                     <h3 className="d-flex align-items-center justify-content-center text-primary fw-bold" style={{ margin: 0, whiteSpace: "nowrap", fontSize: "1.4rem" }}>
                         <img src={logo} alt="Logo" style={{ width: '80px', height: 'auto', marginRight: '10px' }} />
@@ -340,7 +340,7 @@ function Sidebar() {
                                                 <a className={`menu-item ${isActive('/sales')}`} onClick={() => goTo('/sales')} style={{ cursor: 'pointer' }}>
                                                     <i className="fa fa-file-alt me-2"></i> Bán hàng
                                                 </a>
-                                               
+
                                             </>
                                         )}
 
@@ -384,6 +384,25 @@ function Sidebar() {
                             </>
                         );
                     })()}
+                </div>
+                {/* 💡 FOOTER CHỮ KÝ NẰM DƯỚI ĐÁY SIDEBAR (XANH, TRÀN VIỀN 100%) */}
+                <div
+                    className="mt-auto p-3 text-center text-white"
+                    style={{
+                        backgroundColor: "#0d6efd",
+                        position: "sticky",
+                        bottom: "0",
+                        marginLeft: "-20px", /* 💡 Kéo tràn lề trái */
+                        marginRight: "-20px", /* 💡 Kéo tràn lề phải */
+                        marginBottom: "0",
+                        fontSize: "12px",
+                        zIndex: 999,
+                        boxShadow: "0 -4px 10px rgba(0,0,0,0.15)"
+                    }}
+                >
+                    &copy; {new Date().getFullYear()} Bản quyền thuộc về <br />
+                    <span className="fw-bold text-warning fs-6">Phòng CNTT</span> <br />
+                    {/* <span className="opacity-75">(Phòng CNTT)</span> */}
                 </div>
             </div>
         </>
