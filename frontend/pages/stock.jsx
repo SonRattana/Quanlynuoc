@@ -35,8 +35,9 @@ function Stock() {
   const [theKhoModal, setTheKhoModal] = useState({ isOpen: false, productName: "", history: [] });
 
   const [importForm, setImportForm] = useState({ warehouse_id: "", product_id: "", quantity: "", reason: "" });
-  const [exportForm, setExportForm] = useState({ warehouse_id: "", product_id: "", quantity: "", reason: "" });
+  const [exportForm, setExportForm] = useState({ warehouse_id: "", product_id: "", quantity: "", reason: "", ref_sales_order_id: "" });
   const [internalForm, setInternalForm] = useState({ warehouse_id: "", product_id: "", quantity: "", department_name: "Khoa Khám Bệnh", reason: "" });
+  const [pendingOrders, setPendingOrders] = useState([]);
   const [issueHistory, setIssueHistory] = useState([]);
   const getPageFromURL = () => {
     const params = new URLSearchParams(window.location.search);
@@ -104,6 +105,9 @@ function Stock() {
   const materialWarehouses = warehouses.filter(w => isMaterialWH(w.name));
 
   const getProductsForExportForm = () => {
+    // 💡 FIX LỖI CHE TÊN: Nếu đang xuất theo Đơn Hàng thì luôn tải danh sách Thành phẩm để nó hiện tên lập tức
+    if (exportForm.ref_sales_order_id) return allProducts.filter(p => p.item_type === "thanh_pham");
+
     if (!exportForm.warehouse_id) return [];
     const selectedWh = warehouses.find(w => String(w.id) === String(exportForm.warehouse_id));
     if (!selectedWh) return [];
@@ -166,11 +170,64 @@ function Stock() {
     }
   };
 
+  const fetchPendingOrders = async () => {
+    try {
+      const res = await api.get("api/sales-orders", { headers: { Authorization: `Bearer ${token}` } });
+      setPendingOrders(res.data.filter(o => o.status !== 'hoan_thanh' && o.status !== 'huy'));
+    } catch (err) { console.error(err); }
+  };
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     params.set("page", page);
     window.history.replaceState({}, "", `?${params}`);
   }, [page]);
+  /// 💡 ĐỘNG CƠ TỰ ĐỘNG FILL SẢN PHẨM & SỐ LƯỢNG KHI CHỌN ĐƠN HÀNG BÊN XUẤT KHO
+  // useEffect(() => {
+  //   if (!exportForm.ref_sales_order_id) return;
+
+  //   const autoFillExportForm = async () => {
+  //     try {
+  //       const res = await api.get(`api/sales-orders/${exportForm.ref_sales_order_id}`, {
+  //         headers: { Authorization: `Bearer ${token}` }
+  //       });
+  //       const details = res.data.details || [];
+
+  //       if (details.length === 1) {
+  //         const item = details[0];
+
+  //         // 💡 THUẬT TOÁN MỚI: Mặc định là lấy số lượng Cần Giao (Đặt - Đã Giao)
+  //         let suggestQty = item.ordered_quantity - item.delivered_quantity;
+
+  //         // Nếu Đơn hàng này có báo cáo sản xuất, thì chỉ gợi ý xuất tối đa số lượng ĐÃ LÀM XONG
+  //         if (item.produced_quantity > 0) {
+  //           const readyInStock = item.produced_quantity - item.delivered_quantity;
+  //           suggestQty = Math.min(suggestQty, readyInStock);
+  //         }
+
+  //         setExportForm(prev => ({
+  //           ...prev,
+  //           product_id: String(item.product_id),
+  //           // Nếu xưởng chưa làm xong bình nào thì gợi ý = 0
+  //           quantity: suggestQty > 0 ? String(suggestQty) : "0",
+  //           reason: prev.reason || `Giao hàng cho đơn ${res.data.order_code}`
+  //         }));
+  //       }
+  //       else if (details.length > 1) {
+  //         setExportForm(prev => ({
+  //           ...prev,
+  //           product_id: "",
+  //           quantity: "",
+  //           reason: `Giao hàng cho đơn ${res.data.order_code}`
+  //         }));
+  //       }
+  //     } catch (err) {
+  //       console.error("Lỗi lấy chi tiết đơn hàng để auto-fill:", err);
+  //     }
+  //   };
+
+  //   autoFillExportForm();
+  // }, [exportForm.ref_sales_order_id]);
 
   useEffect(() => {
     fetchProducts();
@@ -179,6 +236,7 @@ function Stock() {
     fetchInventory();
     fetchNXT();
     fetchIssueHistory();
+    fetchPendingOrders();
   }, [page]);
 
   // ================= XỬ LÝ LỌC DỮ LIỆU TỒN KHO =================
@@ -255,7 +313,7 @@ function Stock() {
     try {
       await axios.post("api/stock/export", exportForm, { headers: { Authorization: `Bearer ${token}` } });
       setToast({ message: "Xuất kho thành công", type: "success" });
-      setExportForm({ warehouse_id: "", product_id: "", quantity: "", reason: "" });
+      setExportForm({ warehouse_id: "", product_id: "", quantity: "", reason: "", ref_sales_order_id: "" });
       fetchStock(); fetchInventory();
     } catch (err) { setToast({ message: err.response?.data?.message || "Lỗi xuất kho", type: "danger" }); }
   };
@@ -441,7 +499,7 @@ function Stock() {
             {['admin', 'ketoan', 'sanxuat'].includes(user?.role) && (
               <div className="col-12">
                 <StockForm
-                  title="Điều Chuyển / Xuất Hủy / Xuất Bán (Admin)"
+                  title="Điều Chuyển / Xuất Hủy Kho (Admin)"
                   type="export"
                   products={getProductsForExportForm()}
                   warehouses={warehouses}

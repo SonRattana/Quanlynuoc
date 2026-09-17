@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from "react-router-dom";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react"; // 💡 THÊM useRef Ở ĐÂY
 import logo from "../src/public/bvmt-removebg-preview.png";
 import axios from "axios";
 import api from "../src/utils/axios";
@@ -13,15 +13,28 @@ function Sidebar() {
     const user = JSON.parse(localStorage.getItem("user")) || {};
 
     const [isOpen, setIsOpen] = useState(false);
-
-    // Khởi tạo là 0, vừa load trang xong API sẽ nạp số thật vào
     const [unreadCount, setUnreadCount] = useState(0);
 
-    // 1. VỪA LOAD TRANG LÀ CHỌC XUỐNG DB LẤY SỐ ĐƠN TỒN ĐỌNG NGAY
+    // 💡 1. TẠO BỘ NHỚ LƯU TỌA ĐỘ THANH CUỘN
+    const sidebarRef = useRef(null);
+
+    // 💡 2. KHÔI PHỤC VỊ TRÍ CUỘN MỖI KHI LOAD LẠI HOẶC CHUYỂN TRANG
+    useEffect(() => {
+        const savedPos = sessionStorage.getItem("sidebarScrollY");
+        if (sidebarRef.current && savedPos) {
+            // Khôi phục lại vị trí cũ
+            sidebarRef.current.scrollTop = Number(savedPos);
+        }
+    }, [location.pathname]); // Chạy lại mỗi khi sếp bấm sang link mới
+
+    // 💡 3. HÀM GHI NHỚ TỌA ĐỘ KHI SẾP LĂN CHUỘT
+    const handleScroll = (e) => {
+        sessionStorage.setItem("sidebarScrollY", e.target.scrollTop);
+    };
+
     useEffect(() => {
         const fetchPendingCount = async () => {
             try {
-                // Sếp chú ý đường dẫn API này cho khớp với Route của sếp nhé
                 const res = await axios.get(`api/orders/count-pending`);
                 setUnreadCount(res.data.count);
             } catch (error) {
@@ -31,15 +44,13 @@ function Sidebar() {
         fetchPendingCount();
     }, []);
 
-    // Đóng sidebar trên mobile khi chuyển trang
     useEffect(() => {
         setIsOpen(false);
     }, [location.pathname]);
 
-    // 2. NGỒI HÓNG ĐƠN MỚI TỚI (CỘNG DỒN LÊN MÀ KHÔNG CẦN F5)
     useEffect(() => {
         socket.on("co_don_hang_moi", () => {
-            setUnreadCount(prev => prev + 1); // Có đơn nhảy vào là số tự +1
+            setUnreadCount(prev => prev + 1); 
             const audio = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3");
             audio.play().catch(e => console.log("Trình duyệt chặn âm thanh tự động"));
         });
@@ -59,7 +70,6 @@ function Sidebar() {
         navigate(path);
     };
 
-    // HÀM KIỂM TRA TRANG HIỆN TẠI ĐỂ TÔ ĐẬM MENU
     const isActive = (path) => {
         return location.pathname === path ? "active" : "";
     };
@@ -67,13 +77,10 @@ function Sidebar() {
     return (
         <>
             <style>{`
-                /* ============================================== */
-                /* ĐỊNH DẠNG LẠI CỤC THÔNG BÁO CHO CHUẨN */
-                /* ============================================== */
                 .menu-item {
-                    position: relative; /* Để cục thông báo neo theo nút */
-                    padding: 12px 15px; /* Thêm tí padding cho nút bấm nó bự dễ bấm */
-                    border-radius: 8px; /* Bo góc menu */
+                    position: relative; 
+                    padding: 12px 15px; 
+                    border-radius: 8px; 
                     margin-bottom: 5px;
                     display: block;
                     color: #555;
@@ -86,14 +93,11 @@ function Sidebar() {
                     color: #0d6efd;
                 }
 
-                /* ============================================== */
-                /* CSS CHO TRANG ĐANG ĐƯỢC CHỌN (ACTIVE) */
-                /* ============================================== */
                 .menu-item.active {
-                    background-color: rgba(13, 110, 253, 0.1) !important; /* Nền xanh nhạt */
-                    color: #0d6efd !important; /* Chữ xanh đậm */
-                    font-weight: 800 !important; /* Tô đậm chữ */
-                    border-left: 4px solid #0d6efd; /* Vạch kẻ xanh bên trái nhìn cực kỳ pro */
+                    background-color: rgba(13, 110, 253, 0.1) !important; 
+                    color: #0d6efd !important; 
+                    font-weight: 800 !important; 
+                    border-left: 4px solid #0d6efd; 
                 }
 
                 .badge-notify {
@@ -110,7 +114,6 @@ function Sidebar() {
                     box-shadow: 0 0 5px rgba(255, 77, 79, 0.5);
                 }
 
-                /* FIX LỖI THANH CUỘN */
                 .sidebar {
                     overflow-y: auto !important; 
                     padding-bottom: 0px !important; 
@@ -157,9 +160,6 @@ function Sidebar() {
                     display: none;
                 }
 
-                /* ============================================== */
-                /* GIAO DIỆN ĐIỆN THOẠI */
-                /* ============================================== */
                 @media (max-width: 768px) {
                     .mobile-toggle-btn { display: flex !important; }
                     .mobile-overlay.show { display: block !important; }
@@ -226,7 +226,13 @@ function Sidebar() {
 
             <div className={`mobile-overlay ${isOpen ? "show" : ""}`} onClick={() => setIsOpen(false)}></div>
 
-            <div className={`sidebar d-flex flex-column ${isOpen ? "open" : ""}`} style={{ height: "100vh" }}>
+            {/* 💡 4. GẮN MỎ NEO VÀ SỰ KIỆN CUỘN VÀO KHUNG SIDEBAR */}
+            <div 
+                ref={sidebarRef}
+                onScroll={handleScroll}
+                className={`sidebar d-flex flex-column ${isOpen ? "open" : ""}`} 
+                style={{ height: "100vh" }}
+            >
                 <div className="logo mb-2 mt-1 px-3">
                     <h3 className="d-flex align-items-center justify-content-center text-primary fw-bold" style={{ margin: 0, whiteSpace: "nowrap", fontSize: "1.4rem" }}>
                         <img src={logo} alt="Logo" style={{ width: '80px', height: 'auto', marginRight: '10px' }} />
@@ -238,8 +244,6 @@ function Sidebar() {
                     <img src="https://i.pravatar.cc/100" alt="user" className="avatar me-2" style={{ width: '45px', height: '45px', borderRadius: '50%', border: '2px solid #0d6efd' }} />
                     <div>
                         <h6 className="fw-bold mb-1" style={{ fontSize: '15px' }}>{user?.username || "User"}</h6>
-
-                        {/* 💡 ÉP CỨNG MÀU CHỮ: text-white HOẶC text-dark */}
                         {user?.role === 'admin' ? (
                             <span className="badge bg-danger text-white">Quản lý</span>
                         ) : user?.role === 'ketoan' ? (
@@ -253,12 +257,6 @@ function Sidebar() {
                 </div>
 
                 <div className="menu mt-0 px-2">
-                    {/* <a className={`menu-item ${isActive('/')}`} onClick={() => goTo('/')} style={{ cursor: 'pointer' }}>
-                        <i className="fa fa-store text-success me-2"></i> Xem Cửa hàng
-                    </a>
-
-                    <hr className="my-2 text-muted opacity-25" /> */}
-                    {/* BẮT CHUẨN ROLE CỦA USER */}
                     {(() => {
                         const role = user?.role || "nhanvien";
                         const isAdmin = role === "admin";
@@ -268,9 +266,6 @@ function Sidebar() {
 
                         return (
                             <>
-                                {/* ========================================== */}
-                                {/* 1. KHU VỰC TÀI CHÍNH (Kế toán & Admin)     */}
-                                {/* ========================================== */}
                                 {(isAdmin || isKeToan) && (
                                     <>
                                         <div className="text-info small fw-bold px-3 mb-1 mt-2 ">💰 TÀI CHÍNH - BÁO CÁO</div>
@@ -290,14 +285,9 @@ function Sidebar() {
                                     </>
                                 )}
 
-                                {/* ========================================== */}
-                                {/* 2. KHU VỰC SẢN XUẤT - KHO                    */}
-                                {/* ========================================== */}
                                 {(isAdmin || isSanXuat || isKeToan) && (
                                     <>
                                         <div className="text-info small fw-bold px-3 mb-1 mt-2">🏭 SẢN XUẤT - KHO</div>
-
-                                        {/* Các mục Kế toán được xem để đối soát */}
                                         <a className={`menu-item ${isActive('/products')}`} onClick={() => goTo('/products')} style={{ cursor: 'pointer' }}>
                                             <i className="fa fa-box me-2"></i> Quản lý Sản Phẩm / Nguyên Vật Liệu
                                         </a>
@@ -305,7 +295,6 @@ function Sidebar() {
                                             <i className="fa fa-shopping-cart me-2"></i> Nhập Nguyên Vật Liệu
                                         </a>
 
-                                        {/* Các mục CHỈ Sản xuất & Admin được làm (Cấu hình & Tạo lệnh) */}
                                         {(isAdmin || isSanXuat) && (
                                             <>
                                                 <a className={`menu-item ${isActive('/bomsetup')}`} onClick={() => goTo('/bomsetup')} style={{ cursor: 'pointer' }}>
@@ -317,7 +306,6 @@ function Sidebar() {
                                             </>
                                         )}
 
-                                        {/* Kế toán xem tiếp Lịch sử & Tồn kho */}
                                         <a className={`menu-item ${isActive('/production-history')}`} onClick={() => goTo('/production-history')} style={{ cursor: 'pointer' }}>
                                             <i className="fa fa-history me-2"></i> Lịch sử Sản xuất
                                         </a>
@@ -328,13 +316,12 @@ function Sidebar() {
                                     </>
                                 )}
 
-                                {/* ========================================== */}
-                                {/* 3. KHU VỰC BÁN HÀNG                        */}
-                                {/* ========================================== */}
                                 {(isAdmin || isNhanVien || isKeToan) && (
                                     <>
                                         <div className="text-info small fw-bold px-3 mb-1 mt-2">🛒 BÁN HÀNG</div>
-
+                                        <a className={`menu-item ${isActive('/sales-orders')}`} onClick={() => goTo('/sales-orders')} style={{ cursor: 'pointer' }}>
+                                            <i className="fa fa-clipboard-list me-2"></i> Đơn Đặt Hàng
+                                        </a>
                                         {(isAdmin || isNhanVien) && (
                                             <>
                                                 <a className={`menu-item ${isActive('/sales')}`} onClick={() => goTo('/sales')} style={{ cursor: 'pointer' }}>
@@ -344,20 +331,19 @@ function Sidebar() {
                                             </>
                                         )}
 
-                                        {/* Kế toán cũng cần xem lịch sử giao dịch để đối soát tiền */}
                                         <a className={`menu-item ${isActive('/invoices')}`} onClick={() => goTo('/invoices')} style={{ cursor: 'pointer' }}>
                                             <i className="fa fa-file-invoice me-2"></i> Lịch sử giao dịch
                                         </a>
                                         <a className={`menu-item ${isActive('/customers')}`} onClick={() => goTo('/customers')} style={{ cursor: 'pointer' }}>
                                             <i className="fa fa-users me-2"></i> Khách hàng
                                         </a>
+                                        <a className={`menu-item ${isActive('/bottle-deposits')}`} onClick={() => goTo('/bottle-deposits')} style={{ cursor: 'pointer' }}>
+                                            <i className="fa fa-retweet me-2"></i> Quản lý Nợ vỏ
+                                        </a>
                                         <hr className="my-2 text-muted opacity-25" />
                                     </>
                                 )}
 
-                                {/* ========================================== */}
-                                {/* 4. HỆ THỐNG (Chỉ Admin)                    */}
-                                {/* ========================================== */}
                                 {isAdmin && (
                                     <>
                                         <div className="text-info small fw-bold px-3 mb-1 mt-2">⚙️ HỆ THỐNG</div>
@@ -371,9 +357,6 @@ function Sidebar() {
                                     </>
                                 )}
 
-                                {/* ========================================== */}
-                                {/* NÚT CÁ NHÂN & ĐĂNG XUẤT (Ai cũng thấy)     */}
-                                {/* ========================================== */}
                                 <a className={`menu-item fw-bold ${isActive('/change-password')}`} onClick={() => goTo('/change-password')} style={{ cursor: 'pointer' }}>
                                     <i className="fa fa-key me-2"></i> Đổi mật khẩu
                                 </a>
@@ -385,15 +368,15 @@ function Sidebar() {
                         );
                     })()}
                 </div>
-                {/* 💡 FOOTER CHỮ KÝ NẰM DƯỚI ĐÁY SIDEBAR (XANH, TRÀN VIỀN 100%) */}
+                
                 <div
                     className="mt-auto p-3 text-center text-white"
                     style={{
                         backgroundColor: "#0d6efd",
                         position: "sticky",
                         bottom: "0",
-                        marginLeft: "-20px", /* 💡 Kéo tràn lề trái */
-                        marginRight: "-20px", /* 💡 Kéo tràn lề phải */
+                        marginLeft: "-20px", 
+                        marginRight: "-20px", 
                         marginBottom: "0",
                         fontSize: "12px",
                         zIndex: 999,
@@ -402,7 +385,6 @@ function Sidebar() {
                 >
                     &copy; {new Date().getFullYear()} Bản quyền thuộc về <br />
                     <span className="fw-bold text-warning fs-6">Phòng CNTT</span> <br />
-                    {/* <span className="opacity-75">(Phòng CNTT)</span> */}
                 </div>
             </div>
         </>

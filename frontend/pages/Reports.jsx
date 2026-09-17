@@ -205,7 +205,6 @@ export default function Reports() {
             fileName = `BaoCao_LaiLo_PNL_${startDate}.xlsx`;
         }
         else if (reportType === "revenue") {
-            // 1. Dùng processedRevenueData để lấy dữ liệu đã phân nhóm theo Hóa đơn
             excelData = processedRevenueData.map((item) => ({
                 "MÃ HĐ": item.isFirst ? `HD${item.invoice_id}` : "",
                 "NGÀY": item.isFirst ? new Date(item.created_at).toLocaleDateString("vi-VN") : "",
@@ -223,68 +222,45 @@ export default function Reports() {
                 "Chưa trả (Vỏ)": item.isFirst ? Number(item.inv_unreturned || 0) : ""
             }));
 
-            // Căn chỉnh lại độ rộng cột cho vừa vặn
+            // Căn chỉnh chuẩn 14 cột
             columnWidths = [
-                { wpx: 80 },  // MÃ HĐ
-                { wpx: 100 }, // NGÀY
-                { wpx: 120 }, // NGƯỜI GIAO
-                { wpx: 150 }, // KHÁCH HÀNG
-                { wpx: 100 }, // SĐT
-                { wpx: 200 }, // ĐỊA CHỈ
-                { wpx: 150 }, // Hàng hóa
-                { wpx: 60 },  // ĐVT
-                { wpx: 80 },  // Số Lượng
-                { wpx: 100 }, // Đơn giá
-                { wpx: 120 }, // Thành tiền
-                { wpx: 120 }, // Thế chân
-                { wpx: 120 }, // Tổng tiền
-                { wpx: 100 }  // Chưa trả vỏ
+                { wpx: 80 }, { wpx: 100 }, { wpx: 120 }, { wpx: 150 }, { wpx: 100 }, { wpx: 200 },
+                { wpx: 150 }, { wpx: 60 }, { wpx: 80 }, { wpx: 100 }, { wpx: 120 }, { wpx: 120 },
+                { wpx: 120 }, { wpx: 100 }
             ];
 
             worksheet = XLSX.utils.json_to_sheet(excelData);
 
-            // 💡 THUẬT TOÁN GỘP Ô (MERGE CELLS)
             const merges = [];
             let startRow = 1;
-
             for (let i = 0; i < processedRevenueData.length; i++) {
                 const isLastRow = i === processedRevenueData.length - 1;
                 const nextIsFirst = !isLastRow && processedRevenueData[i + 1].isFirst;
-
                 if (isLastRow || nextIsFirst) {
                     if (i > startRow - 1) {
-                        // Các cột cần gộp: Mã HĐ(0), Ngày(1), Người giao(2), KH(3), SĐT(4), Địa chỉ(5), Thế chân(11), Tổng tiền(12), Nợ vỏ(13)
                         const colsToMerge = [0, 1, 2, 3, 4, 5, 11, 12, 13];
                         colsToMerge.forEach(colIndex => {
-                            merges.push({
-                                s: { r: startRow, c: colIndex },
-                                e: { r: i + 1, c: colIndex }
-                            });
+                            merges.push({ s: { r: startRow, c: colIndex }, e: { r: i + 1, c: colIndex } });
                         });
                     }
                     startRow = i + 2;
                 }
             }
-
             worksheet['!merges'] = merges;
-
-            // 💡 THÊM DÒNG TỔNG CỘNG VÀO CUỐI BẢNG
             XLSX.utils.sheet_add_aoa(worksheet, [["TỔNG CỘNG TOÀN KỲ:", "", "", "", "", "", "", "", "", "", revenueFooterStats.thanh_tien, revenueFooterStats.the_chan, revenueFooterStats.tong_tien, revenueFooterStats.unreturned]], { origin: -1 });
-
-            // Gộp ô chữ "TỔNG CỘNG TOÀN KỲ:" từ cột 0 đến cột 9 cho đẹp
             const totalRowIndex = processedRevenueData.length + 1;
             merges.push({ s: { r: totalRowIndex, c: 0 }, e: { r: totalRowIndex, c: 9 } });
 
             fileName = `SoChiTietBanHang_${startDate}.xlsx`;
         }
         else if (reportType === "actual_revenue") {
-            // 1. Vẫn xuất dữ liệu như cũ
             excelData = processedRevenueData.map((item) => ({
                 "NGÀY": item.isFirst ? new Date(item.created_at).toLocaleDateString("vi-VN") : "",
                 "MÃ HĐ": item.isFirst ? `HD${item.invoice_id}` : "",
+                "NGƯỜI GIAO": item.isFirst ? (item.shipper_name || "") : "",
                 "KHÁCH HÀNG": item.isFirst ? (item.customer_name || "Khách lẻ") : "",
                 "SĐT": item.isFirst ? (item.phone || "") : "",
-                "ĐỊA CHỈ": item.isFirst ? (item.address || item.customer_address || "") : "",
+                "ĐỊA CHỈ": item.isFirst ? (item.customer_address || item.address || "") : "",
                 "Hàng hóa": item.product_name,
                 "SL": Number(item.quantity),
                 "ĐƠN GIÁ": Number(item.sell_price),
@@ -296,42 +272,34 @@ export default function Reports() {
                 "Nợ Vỏ Thực Tế": item.isFirst ? Number(item.inv_actual_debt || 0) : ""
             }));
 
-            columnWidths = [{ wpx: 100 }, { wpx: 80 }, { wpx: 150 }, { wpx: 100 }, { wpx: 200 }, { wpx: 150 }, { wpx: 60 }, { wpx: 100 }, { wpx: 120 }, { wpx: 120 }, { wpx: 120 }, { wpx: 120 }, { wpx: 120 }, { wpx: 100 }];
+            // Căn chỉnh chuẩn 15 cột
+            columnWidths = [
+                { wpx: 100 }, { wpx: 80 }, { wpx: 120 }, { wpx: 150 }, { wpx: 100 }, { wpx: 200 },
+                { wpx: 150 }, { wpx: 60 }, { wpx: 100 }, { wpx: 120 }, { wpx: 120 }, { wpx: 120 },
+                { wpx: 120 }, { wpx: 120 }, { wpx: 100 }
+            ];
+
             worksheet = XLSX.utils.json_to_sheet(excelData);
 
-            // 💡 THUẬT TOÁN GỘP Ô (MERGE CELLS) TỰ ĐỘNG
             const merges = [];
-            let startRow = 1; // Excel bắt đầu từ dòng 0 (Header), nên dòng dữ liệu đầu tiên là 1
-
+            let startRow = 1;
             for (let i = 0; i < processedRevenueData.length; i++) {
                 const isLastRow = i === processedRevenueData.length - 1;
                 const nextIsFirst = !isLastRow && processedRevenueData[i + 1].isFirst;
-
-                // Nếu đến dòng cuối của 1 hóa đơn (chuẩn bị sang hóa đơn mới hoặc hết bảng)
                 if (isLastRow || nextIsFirst) {
-                    if (i > startRow - 1) { // Chỉ gộp nếu hóa đơn đó có từ 2 sản phẩm trở lên
-                        // Danh sách Cột cần gộp (Ngày, Mã HĐ, KH, SĐT, Địa chỉ, Thế chân, Tổng tiền, Thực thu, Công nợ, Nợ vỏ)
-                        const colsToMerge = [0, 1, 2, 3, 4, 9, 10, 11, 12, 13];
+                    if (i > startRow - 1) {
+                        const colsToMerge = [0, 1, 2, 3, 4, 5, 10, 11, 12, 13, 14];
                         colsToMerge.forEach(colIndex => {
-                            merges.push({
-                                s: { r: startRow, c: colIndex }, // Ô bắt đầu (Start)
-                                e: { r: i + 1, c: colIndex }     // Ô kết thúc (End)
-                            });
+                            merges.push({ s: { r: startRow, c: colIndex }, e: { r: i + 1, c: colIndex } });
                         });
                     }
-                    startRow = i + 2; // Dời cọc mốc bắt đầu sang hóa đơn tiếp theo
+                    startRow = i + 2;
                 }
             }
-
-            // Gắn lệnh gộp ô vào worksheet
             worksheet['!merges'] = merges;
-
-            // 💡 THÊM DÒNG TỔNG CỘNG VÀ GỘP NÓ LẠI CHO ĐẸP
-            XLSX.utils.sheet_add_aoa(worksheet, [["TỔNG CỘNG:", "", "", "", "", "", "", "", "", revenueFooterStats.actual_deposit, revenueFooterStats.inv_total, revenueFooterStats.inv_paid, revenueFooterStats.inv_debt, revenueFooterStats.actual_debt]], { origin: -1 });
-
-            // Ép gộp ô chữ "TỔNG CỘNG:" kéo dài từ cột 0 đến cột 8
+            XLSX.utils.sheet_add_aoa(worksheet, [["TỔNG CỘNG:", "", "", "", "", "", "", "", "", "", revenueFooterStats.actual_deposit, revenueFooterStats.inv_total, revenueFooterStats.inv_paid, revenueFooterStats.inv_debt, revenueFooterStats.actual_debt]], { origin: -1 });
             const totalRowIndex = processedRevenueData.length + 1;
-            merges.push({ s: { r: totalRowIndex, c: 0 }, e: { r: totalRowIndex, c: 8 } });
+            merges.push({ s: { r: totalRowIndex, c: 0 }, e: { r: totalRowIndex, c: 9 } });
 
             fileName = `DoanhThu_ThucTe_${startDate}.xlsx`;
         }
@@ -516,13 +484,14 @@ export default function Reports() {
 
         if (reportType === "revenue") {
             title = "SỔ CHI TIẾT BÁN HÀNG";
-            tableCols = ["Ngày", "Mã HĐ", "Khách hàng", "SĐT", "Địa chỉ", "Hàng hóa", "SL", "Đơn giá", "Thành tiền", "Thế chân", "Tổng tiền"];
+            tableCols = ["Ngày", "Mã HĐ", "Người giao", "Khách hàng", "SĐT", "Địa chỉ", "Hàng hóa", "SL", "Đơn giá", "Thành tiền", "Thế chân", "Tổng tiền"];
             tableRows = data.map(item => [
                 new Date(item.created_at).toLocaleDateString("vi-VN"),
                 `HD${item.invoice_id}`,
-                item.customer_name || "Khach le",
+                item.shipper_name || "",
+                item.customer_name || "Khách lẻ",
                 item.phone || "",
-                item.address || item.customer_address || "",
+                item.customer_address || item.address || "",
                 item.product_name,
                 item.quantity,
                 Number(item.sell_price).toLocaleString("vi-VN"),
@@ -532,7 +501,7 @@ export default function Reports() {
             ]);
 
             footData = [
-                { content: 'TỔNG CỘNG:', colSpan: 7, styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: 'TỔNG CỘNG:', colSpan: 9, styles: { halign: 'right', fontStyle: 'bold' } }, // 💡 Đã sửa chuẩn colSpan cho PDF
                 { content: revenueFooterStats.thanh_tien.toLocaleString("vi-VN"), styles: { fontStyle: 'bold', textColor: [220, 53, 69] } },
                 { content: revenueFooterStats.the_chan.toLocaleString("vi-VN"), styles: { fontStyle: 'bold', textColor: [108, 117, 125] } },
                 { content: revenueFooterStats.tong_tien.toLocaleString("vi-VN"), styles: { fontStyle: 'bold', textColor: [25, 135, 84] } }
@@ -540,11 +509,12 @@ export default function Reports() {
             fileName = `SoChiTietBanHang_${startDate}.pdf`;
         }
         else if (reportType === "actual_revenue") {
-            title = "BAO CAO DOANH THU THUC TE (DONG TIEN & VO BINH)";
-            tableCols = ["Ngày", "Mã HĐ", "Khách hàng", "Hàng hóa", "SL", "Cọc Giữ", "Tổng Tiền", "Thực Thu", "Nợ Tiền", "Nợ Vỏ"];
+            title = "BÁO CÁO DOANH THU THỰC TẾ (DÒNG TIỀN & VỎ BÌNH)";
+            tableCols = ["Ngày", "Mã HĐ", "Người giao", "Khách hàng", "Hàng hóa", "SL", "Cọc Giữ", "Tổng Tiền", "Thực Thu", "Nợ Tiền", "Nợ Vỏ"];
             tableRows = processedRevenueData.map(item => [
                 item.isFirst ? new Date(item.created_at).toLocaleDateString("vi-VN") : "",
                 item.isFirst ? `HD${item.invoice_id}` : "",
+                item.isFirst ? (item.shipper_name || "") : "",
                 item.isFirst ? (item.customer_name || "Khách lẻ") : "",
                 item.product_name,
                 item.quantity,
@@ -556,12 +526,12 @@ export default function Reports() {
             ]);
 
             footData = [
-                { content: 'TONG CONG TOAN KY:', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: 'TỔNG CỘNG TOÀN KỲ:', colSpan: 6, styles: { halign: 'right', fontStyle: 'bold' } },
                 { content: revenueFooterStats.actual_deposit.toLocaleString("vi-VN"), styles: { fontStyle: 'bold', textColor: [108, 117, 125] } },
                 { content: revenueFooterStats.inv_total.toLocaleString("vi-VN"), styles: { fontStyle: 'bold', textColor: [33, 37, 41] } },
                 { content: revenueFooterStats.inv_paid.toLocaleString("vi-VN"), styles: { fontStyle: 'bold', textColor: [25, 135, 84] } },
                 { content: revenueFooterStats.inv_debt.toLocaleString("vi-VN"), styles: { fontStyle: 'bold', textColor: [220, 53, 69] } },
-                { content: revenueFooterStats.actual_debt > 0 ? revenueFooterStats.actual_debt.toString() + " vo" : "0 vo", styles: { fontStyle: 'bold', textColor: [220, 53, 69] } }
+                { content: revenueFooterStats.actual_debt > 0 ? revenueFooterStats.actual_debt.toString() + " vỏ" : "0 vỏ", styles: { fontStyle: 'bold', textColor: [220, 53, 69] } }
             ];
             fileName = `DoanhThu_ThucTe_${startDate}.pdf`;
         }

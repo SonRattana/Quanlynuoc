@@ -65,7 +65,7 @@ export default function Expenses() {
     };
 
     const handleDelete = async (id) => {
-        if (!window.confirm("Sếp có chắc chắn muốn xóa khoản chi này không?")) return;
+        if (!window.confirm("Bạn có chắc chắn muốn xóa khoản chi này không?")) return;
         try {
             await api.delete(`api/expenses/${id}`, {
                 headers: { Authorization: `Bearer ${token}` }

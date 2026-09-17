@@ -24,7 +24,14 @@ export default function Purchases() {
     const [form, setForm] = useState({ supplier_name: "", invoice_code: "", total_fee_amount: "", note: "", warehouse_id: "", vat_rate: "0" });
     const token = localStorage.getItem("token");
     const [editModal, setEditModal] = useState({ isOpen: false, data: {} });
+    // --- BỘ LỌC TỒN KHO LÔ NVL ---
+    const [showBatchFilter, setShowBatchFilter] = useState(false);
+    const [filterBatchTenNVL, setFilterBatchTenNVL] = useState("");
+    const [filterBatchNhaCC, setFilterBatchNhaCC] = useState("");
 
+    // Rút trích danh sách duy nhất cho dropdown
+    const uniqueBatchTenNVL = [...new Set(batches.map(b => String(b.name || "").trim()).filter(Boolean))];
+    const uniqueBatchNhaCC = [...new Set(batches.map(b => String(b.supplier_name || "").trim()).filter(Boolean))];
     useEffect(() => {
         const fetchInitData = async () => {
             try {
@@ -157,12 +164,27 @@ export default function Purchases() {
         )
         .slice(0, 50);
 
-    const filteredBatches = batches.filter(b =>
-        b.name.toLowerCase().includes(searchBatch.toLowerCase()) ||
-        (b.supplier_name && b.supplier_name.toLowerCase().includes(searchBatch.toLowerCase())) ||
-        (b.invoice_code && b.invoice_code.toLowerCase().includes(searchBatch.toLowerCase())) ||
-        b.po_id.toString().includes(searchBatch)
-    );
+    const filteredBatches = batches.filter(b => {
+        // Lọc qua ô tìm kiếm
+        const searchLower = String(searchBatch || "").toLowerCase().trim();
+        const matchSearch = !searchLower ||
+            String(b.name || "").toLowerCase().includes(searchLower) ||
+            String(b.supplier_name || "").toLowerCase().includes(searchLower) ||
+            String(b.invoice_code || "").toLowerCase().includes(searchLower) ||
+            String(b.po_id).includes(searchLower);
+
+        // Lọc qua Dropdown
+        const tenNVL = String(b.name || "").trim();
+        const filterTen = String(filterBatchTenNVL || "").trim();
+        // 💡 ĐÃ SỬA CHỮ 'ten' THÀNH 'tenNVL' Ở DÒNG DƯỚI NÀY
+        const matchTen = !filterTen ? true : tenNVL === filterTen;
+
+        const nhaCC = String(b.supplier_name || "").trim();
+        const filterNhaCC = String(filterBatchNhaCC || "").trim();
+        const matchNhaCC = !filterNhaCC ? true : nhaCC === filterNhaCC;
+
+        return matchSearch && matchTen && matchNhaCC;
+    });
 
     const handleEdit = async (h) => {
         try {
@@ -540,23 +562,61 @@ export default function Purchases() {
 
                 {activeTab === 'history' && (
                     <div className="row">
-                        {/* 💡 CỘT TRÁI - CÁC LÔ NVL ĐANG TỒN CÓ Ô TÌM KIẾM */}
-                        <div className="col-md-4">
+                        {/* 💡 CỘT TRÁI - CÁC LÔ NVL ĐANG TỒN CÓ Ô TÌM KIẾM VÀ LỌC */}
+                        <div className="col-md-5">
                             <div className="bg-white p-3 rounded shadow-sm border-top border-success border-4 h-100">
                                 <div className="d-flex justify-content-between align-items-center mb-3">
                                     <h6 className="fw-bold text-success mb-0"><i className="fa fa-layer-group me-2"></i>Tồn kho chi tiết (Theo Lô)</h6>
                                 </div>
 
-                                {/* Ô TÌM KIẾM LÔ HÀNG */}
-                                <div className="mb-3">
-                                    <input
-                                        type="text"
-                                        className="form-control form-control-sm border-success shadow-sm"
-                                        placeholder="🔍 Tên NVL, Nhà CC, Mã PN..."
-                                        value={searchBatch}
-                                        onChange={(e) => setSearchBatch(e.target.value)}
-                                    />
+                                {/* Ô TÌM KIẾM VÀ NÚT LỌC */}
+                                <div className="d-flex gap-2 mb-3">
+                                    <div className="input-group input-group-sm shadow-sm flex-grow-1">
+                                        <span className="input-group-text bg-white text-muted border-success"><i className="fa fa-search"></i></span>
+                                        <input
+                                            type="text"
+                                            className="form-control border-success border-start-0 ps-0"
+                                            placeholder="Tên NVL, Nhà CC, Mã PN..."
+                                            value={searchBatch}
+                                            onChange={(e) => setSearchBatch(e.target.value)}
+                                        />
+                                    </div>
+                                    <button
+                                        className={`btn btn-sm ${showBatchFilter ? 'btn-success' : 'btn-outline-success'} shadow-sm text-nowrap fw-bold`}
+                                        onClick={() => setShowBatchFilter(!showBatchFilter)}
+                                    >
+                                        <i className="fa fa-filter"></i> Lọc
+                                    </button>
                                 </div>
+
+                                {/* BẢNG ĐIỀU KIỆN LỌC (CHỈ HIỆN KHI BẤM NÚT) */}
+                                {showBatchFilter && (
+                                    <div className="card card-body bg-light mb-3 shadow-sm border-success border-opacity-25 animate__animated animate__fadeIn p-2">
+                                        <div className="row g-2">
+                                            <div className="col-12">
+                                                <label className="fw-bold small text-muted mb-1" style={{ fontSize: "11px" }}>🛠️ Tên Nguyên Vật Liệu</label>
+                                                <select className="form-select form-select-sm border-success border-opacity-50" value={filterBatchTenNVL} onChange={e => setFilterBatchTenNVL(e.target.value)}>
+                                                    <option value="">-- Tất cả NVL --</option>
+                                                    {uniqueBatchTenNVL.map((t, i) => <option key={i} value={t}>{t}</option>)}
+                                                </select>
+                                            </div>
+                                            <div className="col-12">
+                                                <label className="fw-bold small text-muted mb-1" style={{ fontSize: "11px" }}>🏢 Nhà cung cấp</label>
+                                                <select className="form-select form-select-sm border-success border-opacity-50" value={filterBatchNhaCC} onChange={e => setFilterBatchNhaCC(e.target.value)}>
+                                                    <option value="">-- Tất cả Nhà CC --</option>
+                                                    {uniqueBatchNhaCC.map((k, i) => <option key={i} value={k}>{k}</option>)}
+                                                </select>
+                                            </div>
+                                            {(filterBatchTenNVL || filterBatchNhaCC) && (
+                                                <div className="col-12 text-end mt-1">
+                                                    <button className="btn btn-sm btn-link text-danger text-decoration-none fw-bold p-0" onClick={() => { setFilterBatchTenNVL(""); setFilterBatchNhaCC(""); }}>
+                                                        <i className="fa fa-times-circle me-1"></i> Xóa lọc
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
 
                                 <div className="table-responsive" style={{ maxHeight: '600px', overflowY: 'auto' }}>
                                     <table className="table table-hover align-middle small table-mobile-cards">
@@ -572,14 +632,28 @@ export default function Purchases() {
                                                 filteredBatches.map(b => (
                                                     <tr key={b.id} className={Number(b.quantity_remaining) === 0 ? "table-secondary opacity-75" : ""}>
                                                         <td className="fw-bold">
-                                                            {b.name}
-                                                            <div className="text-muted mt-1" style={{ fontSize: '11px' }}>
-                                                                <span className="badge bg-info text-dark me-2" title={`Nhà cung cấp: ${b.supplier_name}`}>
+                                                            {/* TÊN NGUYÊN VẬT LIỆU */}
+                                                            <div className="text-dark fs-6">{b.name}</div>
+                                                            
+                                                            {/* 💡 HIỂN THỊ TÊN NHÀ CUNG CẤP Ở ĐÂY */}
+                                                            {b.supplier_name && (
+                                                                <div className="text-secondary mt-1" style={{ fontSize: '12px', fontWeight: '600' }}>
+                                                                    <i className="fa fa-building text-warning me-1"></i>{b.supplier_name}
+                                                                </div>
+                                                            )}
+
+                                                            {/* THÔNG TIN MÃ PHIẾU, NGÀY VÀ HÓA ĐƠN */}
+                                                            <div className="text-muted mt-1" style={{ fontSize: '14px' }}>
+                                                                <span className="badge bg-info text-dark me-2">
                                                                     PN#{b.po_id}
                                                                 </span>
-                                                                {formatDate(b.created_at)}
+                                                                <br/>
+                                                                <div className="text-dark me-2">
+                                                                    Ngày nhập: {formatDate(b.created_at)}
+                                                                </div>
+                                                                
                                                                 {b.invoice_code && (
-                                                                    <div className="text-primary mt-1 fw-bold" style={{ fontSize: '11px' }}>
+                                                                    <div className="text-primary mt-1 fw-bold" style={{ fontSize: '14px' }}>
                                                                         <i className="fa fa-file-invoice me-1"></i>HĐ: {b.invoice_code}
                                                                     </div>
                                                                 )}
@@ -610,7 +684,7 @@ export default function Purchases() {
                         </div>
 
                         {/* CỘT PHẢI - LỊCH SỬ NHẬP HÀNG */}
-                        <div className="col-md-8">
+                        <div className="col-md-7">
                             <div className="bg-white p-3 rounded shadow-sm border-top border-info border-4 h-100">
                                 <div className="d-flex justify-content-between align-items-center mb-3">
                                     <h6 className="fw-bold text-info mb-0"><i className="fa fa-receipt me-2"></i>Lịch sử Nhập hàng</h6>

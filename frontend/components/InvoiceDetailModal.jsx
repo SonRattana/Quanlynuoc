@@ -46,14 +46,21 @@ export default function InvoiceDetailModal({ invoiceId, onClose }) {
                     <div className="modal-body p-4">
                         <div className="row mb-4 bg-light p-3 rounded border">
                             <div className="col-md-7">
-                                <p className="mb-2"><strong className="text-muted">👤 Khách hàng:</strong> <span className="fw-bold">{data.customer_name}</span></p>
-                                <p className="mb-2"><strong className="text-muted">📞 SĐT:</strong> <span className="text-primary fw-bold">{(data.phone)}</span></p>
+                                {/* 💡 Nếu không có tên thì báo Khách vãng lai */}
+                                <p className="mb-2"><strong className="text-muted">👤 Khách hàng:</strong> <span className="fw-bold">{data.customer_name || 'Khách vãng lai'}</span></p>
+
+                                {/* 💡 Tránh tình trạng SĐT rỗng làm móp form */}
+                                <p className="mb-2"><strong className="text-muted">📞 SĐT:</strong> <span className="text-primary fw-bold">{data.phone || 'Chưa cung cấp'}</span></p>
+
                                 <p className="mb-2"><strong className="text-muted">🏠 Địa chỉ:</strong> <span className="fw-bold">{data.customer_address || '---'}</span></p>
                             </div>
                             <div className="col-md-5 text-md-end border-start">
                                 <p className="mb-2 text-primary fw-bold">🕒 Ngày lập: {formatDate(data.created_at)}</p>
                                 <p className="mb-0 text-success fw-bold small">
-                                    {data.delivery_fee > 0 ? `🛵 Giao hàng: ${data.shipper_name || 'Đang chờ'}` : `🚶 Khách tự lấy`}
+                                    {/* 💡 Bắt chính xác điều kiện Shipper hoặc Phí ship */}
+                                    {(data.delivery_fee > 0 || (data.shipper_name && data.shipper_name.trim() !== ""))
+                                        ? `🛵 Giao hàng: ${data.shipper_name || 'Đang chờ'}`
+                                        : `🚶 Khách tự lấy`}
                                 </p>
                             </div>
                         </div>

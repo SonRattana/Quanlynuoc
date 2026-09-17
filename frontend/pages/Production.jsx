@@ -13,7 +13,64 @@ export default function Production() {
     const [bomPreview, setBomPreview] = useState([]);
     const [shift, setShift] = useState("Ca 1");
     const [note, setNote] = useState("");
+    const [pendingOrders, setPendingOrders] = useState([]);
+    const [selectedOrder, setSelectedOrder] = useState("");
 
+    // Hàm gọi API lấy đơn hàng chưa xong
+    const fetchPendingOrders = async () => {
+        try {
+            const res = await api.get("api/sales-orders", { headers: { Authorization: `Bearer ${token}` } });
+
+            // 💡 CHỈ LẤY ĐƠN ĐANG CHỜ XƯỞNG LÀM. Đã giao, đã hủy, hay mới tạo chưa duyệt thì ẩn sạch!
+            const activeOrders = res.data.filter(o => o.status === 'cho_san_xuat' || o.status === 'dang_san_xuat');
+
+            setPendingOrders(activeOrders);
+        } catch (err) { console.error(err); }
+    };
+    // 💡 ĐỘNG CƠ TỰ ĐỘNG FILL SẢN PHẨM & SỐ LƯỢNG KHI CHỌN ĐƠN HÀNG
+    useEffect(() => {
+        if (!selectedOrder) return;
+
+        const autoFillOrderData = async () => {
+            try {
+                const res = await api.get(`api/sales-orders/${selectedOrder}`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                const details = res.data.details || [];
+
+                // Nếu đơn hàng chỉ có 1 mặt hàng -> Tự động điền luôn
+                if (details.length === 1) {
+                    const item = details[0];
+                    setSelectedProduct(String(item.product_id)); // Fill Tên SP
+
+                    // 💡 CÔNG THỨC THÔNG MINH MỚI (Đồng bộ với bảng Tiến độ):
+                    // Khấu trừ luôn số hàng đã lấy từ kho đi giao
+                    const effectiveReady = Math.max(item.produced_quantity || 0, item.delivered_quantity || 0);
+                    const remainingQty = item.ordered_quantity - effectiveReady;
+
+                    if (remainingQty > 0) {
+                        setQuantity(String(remainingQty));
+                    } else {
+                        setQuantity("0");
+                        setToast({ message: "Đơn này đã đủ hàng rồi, xưởng không cần làm thêm!", type: "info" });
+                    }
+                }
+                // Nếu đơn có nhiều mặt hàng, reset ô SP để người dùng tự chọn món muốn làm
+                else if (details.length > 1) {
+                    setSelectedProduct("");
+                    setQuantity("");
+                }
+            } catch (err) {
+                console.error("Lỗi lấy chi tiết đơn:", err);
+            }
+        };
+
+        autoFillOrderData();
+    }, [selectedOrder]); // Mỗi khi chọn đơn khác, hàm này sẽ chạy lại
+    useEffect(() => {
+        fetchGoods();
+        fetchPendingOrders(); // Gọi hàm khi load trang
+    }, []);
     const [operatingCosts, setOperatingCosts] = useState({
         dien: "",
         nuoc: "",
@@ -112,7 +169,8 @@ export default function Production() {
                 product_id: selectedProduct,
                 quantity: Number(quantity),
                 materials: bomPreview,
-                note: note
+                note: note,
+                ref_sales_order_id: selectedOrder || null
             }, { headers: { Authorization: `Bearer ${token}` } });
 
             setToast({
@@ -141,8 +199,29 @@ export default function Production() {
                     </div>
 
                     <div className="card-body p-4 bg-light">
+                        {/* 💡 BƯỚC 1 MỚI: CHỌN ĐƠN HÀNG TRƯỚC */}
                         <div className="mb-4">
-                            <label className="fw-bold text-secondary mb-2">1. Chọn loại nước cần bơm (Sản phẩm):</label>
+                            <label className="fw-bold text-info mb-2">1. Sản xuất theo Đơn Đặt Hàng (Tùy chọn):</label>
+                            <select
+                                className="form-select form-select-lg border-info shadow-sm"
+                                value={selectedOrder}
+                                onChange={(e) => setSelectedOrder(e.target.value)}
+                            >
+                                <option value="">-- Không có (Sản xuất cất kho) --</option>
+                                {pendingOrders.map(o => (
+                                    <option key={o.id} value={o.id}>
+                                        Mã: {o.order_code} - Khách: {o.customer_name}
+                                    </option>
+                                ))}
+                            </select>
+                            <small className="text-muted fst-italic">
+                                *Chọn đơn hàng để hệ thống tự động điền sản phẩm và tính số lượng còn thiếu.
+                            </small>
+                        </div>
+
+                        {/* 💡 BƯỚC 2: CHỌN SẢN PHẨM */}
+                        <div className="mb-4">
+                            <label className="fw-bold text-secondary mb-2">2. Chọn loại nước cần bơm (Sản phẩm):</label>
                             <select
                                 className="form-select form-select-lg border-primary shadow-sm"
                                 value={selectedProduct}
@@ -160,7 +239,7 @@ export default function Production() {
                         {selectedProduct && (
                             <>
                                 <div className="mb-4">
-                                    <label className="fw-bold text-secondary mb-2">2. Chọn kho cất giữ sau khi bơm:</label>
+                                    <label className="fw-bold text-secondary mb-2">3. Chọn kho cất giữ sau khi bơm:</label>
                                     <select
                                         className="form-select form-select-lg border-success shadow-sm fw-bold text-success"
                                         value={warehouseId}
@@ -171,7 +250,7 @@ export default function Production() {
                                 </div>
 
                                 <div className="mb-4">
-                                    <label className="fw-bold text-secondary mb-2">3. Số lượng sản xuất đợt này:</label>
+                                    <label className="fw-bold text-secondary mb-2">4. Số lượng sản xuất đợt này:</label>
                                     <div className="input-group input-group-lg shadow-sm">
                                         <input
                                             type="number"
@@ -224,7 +303,7 @@ export default function Production() {
                                 )}
 
                                 <div className="mb-4">
-                                    <label className="fw-bold text-secondary mb-2">4.Ghi chú hao hụt:</label>
+                                    <label className="fw-bold text-secondary mb-2">5.Ghi chú hao hụt:</label>
                                     <div className="row g-2">
                                         {/* <div className="col-md-3">
                                             <select
@@ -274,7 +353,7 @@ export default function Production() {
                                             </div>
                                         </div> */}
 
-                                        {/* <div className="col-md-4">
+                                {/* <div className="col-md-4">
                                             <label className="small fw-bold text-muted mb-1">👷 Lương nhân công</label>
                                             <div className="input-group input-group-sm shadow-sm">
                                                 <input type="text" className="form-control border-warning fw-bold text-dark text-end" placeholder="0" 
@@ -283,7 +362,7 @@ export default function Production() {
                                             </div>
                                         </div> */}
 
-                                        {/* <div className="col-md-6">
+                                {/* <div className="col-md-6">
                                             <label className="small fw-bold text-muted mb-1">🔧 Sửa chữa, bảo trì máy</label>
                                             <div className="input-group input-group-sm shadow-sm">
                                                 <input type="text" className="form-control border-warning fw-bold text-dark text-end" placeholder="0" 
@@ -292,8 +371,8 @@ export default function Production() {
                                             </div>
                                         </div> */}
 
-                                        {/* Ô Nhập Phát Sinh Khác (Clean lại cho gọn trên 1 dòng) */}
-                                        {/* <div className="col-md-12">
+                                {/* Ô Nhập Phát Sinh Khác (Clean lại cho gọn trên 1 dòng) */}
+                                {/* <div className="col-md-12">
                                             <label className="small fw-bold text-muted mb-1">💰 Phát sinh khác (Nếu có)</label>
                                             <div className="input-group input-group-sm shadow-sm">
                                                 <input type="text" className="form-control border-warning fw-bold text-dark text-end" style={{ maxWidth: "180px" }} placeholder="0"
@@ -316,8 +395,8 @@ export default function Production() {
                                         <span className="fw-bold text-danger fs-5">{formatMoney(totalExtraCost)}</span>
                                     </div> */}
 
-                                    {/* 💡 DÒNG GHI CHÚ BẢO MẬT HIỂN THỊ CHO THỢ */}
-                                    {/* <div className="mt-3 p-2 bg-light border-start border-4 border-info rounded shadow-sm">
+                                {/* 💡 DÒNG GHI CHÚ BẢO MẬT HIỂN THỊ CHO THỢ */}
+                                {/* <div className="mt-3 p-2 bg-light border-start border-4 border-info rounded shadow-sm">
                                         <small className="text-muted d-block fst-italic" style={{ fontSize: "12px" }}>
                                             <i className="bi bi-info-circle-fill text-info me-1"></i>
                                             <strong>Lưu ý:</strong> Tiền lương nhân công và khấu hao máy móc đã được hệ thống ẩn đi để bảo mật. Kế toán sẽ tự động cộng thêm các khoản này vào giá vốn thực tế vào cuối ngày.

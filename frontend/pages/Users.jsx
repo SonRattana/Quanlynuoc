@@ -139,7 +139,7 @@ function Users() {
                                 <option value="admin">Quản lý (Admin)</option>
                             </select>
                         </div>
-                        <div className="col-12 col-md-2 mt-3 mt-md-0">
+                        <div className="col-12 col-md-2">
                             <button type="submit" className="btn btn-primary w-100">Tạo mới</button>
                         </div>
                     </form>

@@ -23,6 +23,18 @@ function Products() {
     const [searchProduct, setSearchProduct] = useState("");
     const [searchMaterial, setSearchMaterial] = useState("");
 
+    // 💡 TỪ ĐÂY: KHAI BÁO STATE CHO 2 BỘ LỌC
+    // 1. Lọc Sản Phẩm (TP)
+    const [showFilterTP, setShowFilterTP] = useState(false);
+    const [filterKhoTP, setFilterKhoTP] = useState("");
+    const [filterTenTP, setFilterTenTP] = useState("");
+    const [filterDungTichTP, setFilterDungTichTP] = useState("");
+
+    // 2. Lọc Nguyên Vật Liệu (NVL)
+    const [showFilterNVL, setShowFilterNVL] = useState(false);
+    const [filterKhoNVL, setFilterKhoNVL] = useState("");
+    const [filterTenNVL, setFilterTenNVL] = useState("");
+
     const [expandedRows, setExpandedRows] = useState([]);
     const [batchesData, setBatchesData] = useState({});
     const [loadingBatches, setLoadingBatches] = useState({});
@@ -273,15 +285,52 @@ function Products() {
         }
     };
 
-    const filteredTpList = tpList.filter(p =>
-        p.name.toLowerCase().includes(searchProduct.toLowerCase()) ||
-        p.id.toString().includes(searchProduct)
-    );
+    // 💡 LẤY DANH SÁCH LỌC (ĐÃ CHUẨN HÓA KHOẢNG TRẮNG)
+    const uniqueKhoTP = [...new Set(tpList.map(p => String(p.warehouse_name || p.warehouse || p.ten_kho || p.kho || "Chưa rõ kho").trim()).filter(Boolean))];
+    const uniqueTenTP = [...new Set(tpList.map(p => String(p.name || "").trim()).filter(Boolean))];
+    const uniqueDungTichTP = [...new Set(tpList.map(p => String(p.volume || "").trim()).filter(Boolean))];
 
-    const filteredNvlList = nvlList.filter(p =>
-        p.name.toLowerCase().includes(searchMaterial.toLowerCase()) ||
-        p.id.toString().includes(searchMaterial)
-    );
+    const uniqueKhoNVL = [...new Set(nvlList.map(p => String(p.warehouse_name || p.warehouse || p.ten_kho || p.kho || "Chưa rõ kho").trim()).filter(Boolean))];
+    const uniqueTenNVL = [...new Set(nvlList.map(p => String(p.name || "").trim()).filter(Boolean))];
+
+    // 💡 THUẬT TOÁN LỌC KẾT HỢP (TÌM KIẾM + DROPDOWN)
+    const filteredTpList = tpList.filter(p => {
+        // Lọc theo ô tìm kiếm
+        const searchLower = String(searchProduct || "").toLowerCase().trim();
+        const matchSearch = !searchLower || String(p.name || "").toLowerCase().includes(searchLower) || String(p.id).includes(searchLower);
+
+        // Lọc theo Kho chứa
+        const kho = String(p.warehouse_name || p.warehouse || p.ten_kho || p.kho || "Chưa rõ kho").trim();
+        const filterKho = String(filterKhoTP || "").trim();
+        const matchKho = !filterKho ? true : kho === filterKho;
+
+        // Lọc theo Tên SP
+        const ten = String(p.name || "").trim();
+        const filterTen = String(filterTenTP || "").trim();
+        const matchTen = !filterTen ? true : ten === filterTen;
+
+        // Lọc theo Dung tích
+        const dungTich = String(p.volume || "").trim();
+        const filterDungTich = String(filterDungTichTP || "").trim();
+        const matchDungTich = !filterDungTich ? true : dungTich === filterDungTich;
+
+        return matchSearch && matchKho && matchTen && matchDungTich;
+    });
+
+    const filteredNvlList = nvlList.filter(p => {
+        const searchLower = String(searchMaterial || "").toLowerCase().trim();
+        const matchSearch = !searchLower || String(p.name || "").toLowerCase().includes(searchLower) || String(p.id).includes(searchLower);
+
+        const kho = String(p.warehouse_name || p.warehouse || p.ten_kho || p.kho || "Chưa rõ kho").trim();
+        const filterKho = String(filterKhoNVL || "").trim();
+        const matchKho = !filterKho ? true : kho === filterKho;
+
+        const ten = String(p.name || "").trim();
+        const filterTen = String(filterTenNVL || "").trim();
+        const matchTen = !filterTen ? true : ten === filterTen;
+
+        return matchSearch && matchKho && matchTen;
+    });
 
     const toggleRowExpand = async (productId) => {
         const isExpanded = expandedRows.includes(productId);
@@ -617,19 +666,62 @@ function Products() {
                     <div className="mt-4">
                         {(filterType === "all" || filterType === "thanh_pham") && (
                             <div className="mb-5">
-                                <div className="d-flex justify-content-between align-items-center mb-3">
+                                {/* 💡 THANH TÌM KIẾM VÀ NÚT LỌC CỦA SẢN PHẨM */}
+                                <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
                                     <h5 className="fw-bold text-success mb-0">📦 Danh sách Sản Phẩm</h5>
-                                    <div className="input-group shadow-sm" style={{ width: '300px' }}>
-                                        <span className="input-group-text bg-white text-muted border-success"><i className="fa fa-search"></i></span>
-                                        <input
-                                            type="text"
-                                            className="form-control border-success border-start-0 ps-0"
-                                            placeholder="Tìm tên hoặc ID sản phẩm..."
-                                            value={searchProduct}
-                                            onChange={(e) => { setSearchProduct(e.target.value); setPage(1); }}
-                                        />
+                                    <div className="d-flex gap-2">
+                                        <div className="input-group shadow-sm" style={{ width: '250px' }}>
+                                            <span className="input-group-text bg-white text-muted border-success"><i className="fa fa-search"></i></span>
+                                            <input
+                                                type="text"
+                                                className="form-control border-success border-start-0 ps-0"
+                                                placeholder="Tìm tên hoặc ID..."
+                                                value={searchProduct}
+                                                onChange={(e) => { setSearchProduct(e.target.value); setPage(1); }}
+                                            />
+                                        </div>
+                                        <button className={`btn ${showFilterTP ? 'btn-success' : 'btn-outline-success'} shadow-sm text-nowrap fw-bold`} onClick={() => setShowFilterTP(!showFilterTP)}>
+                                            <i className="fa fa-filter me-1"></i> Bộ lọc
+                                        </button>
                                     </div>
                                 </div>
+
+                                {/* 💡 BẢNG DROPDOWN LỌC SẢN PHẨM */}
+                                {showFilterTP && (
+                                    <div className="card card-body bg-light mb-3 shadow-sm border-success border-opacity-25 animate__animated animate__fadeIn">
+                                        <div className="row g-3">
+                                            <div className="col-md-4">
+                                                <label className="fw-bold small text-muted mb-1">🏢 Kho chứa</label>
+                                                {/* SẾP ĐỐI CHIẾU LẠI DÒNG NÀY XEM ĐÃ KHỚP 100% CHƯA NHÉ */}
+                                                <select className="form-select border-success border-opacity-50" value={filterKhoTP} onChange={e => { setFilterKhoTP(e.target.value); setPage(1); }}>
+                                                    <option value="">-- Tất cả Kho --</option>
+                                                    {uniqueKhoTP.map((k, i) => <option key={i} value={k}>{k}</option>)}
+                                                </select>
+                                            </div>
+                                            <div className="col-md-4">
+                                                <label className="fw-bold small text-muted mb-1">📦 Tên Sản Phẩm</label>
+                                                <select className="form-select border-success border-opacity-50" value={filterTenTP} onChange={e => { setFilterTenTP(e.target.value); setPage(1); }}>
+                                                    <option value="">-- Tất cả Tên --</option>
+                                                    {uniqueTenTP.map((t, i) => <option key={i} value={t}>{t}</option>)}
+                                                </select>
+                                            </div>
+                                            <div className="col-md-4">
+                                                <label className="fw-bold small text-muted mb-1">💧 Dung tích</label>
+                                                <select className="form-select border-success border-opacity-50" value={filterDungTichTP} onChange={e => { setFilterDungTichTP(e.target.value); setPage(1); }}>
+                                                    <option value="">-- Tất cả Dung tích --</option>
+                                                    {uniqueDungTichTP.map((d, i) => <option key={i} value={d}>{d >= 1000 ? `${d / 1000} L` : `${d} ml`}</option>)}
+                                                </select>
+                                            </div>
+                                            {(filterKhoTP || filterTenTP || filterDungTichTP) && (
+                                                <div className="col-12 text-end mt-2">
+                                                    <button className="btn btn-sm btn-link text-danger text-decoration-none fw-bold" onClick={() => { setFilterKhoTP(""); setFilterTenTP(""); setFilterDungTichTP(""); setPage(1); }}>
+                                                        <i className="fa fa-times-circle me-1"></i> Xóa bộ lọc
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                                 <div className="table-responsive border rounded">
                                     <table className="table table-hover align-middle mb-0 table-mobile-cards">
                                         <thead className="table-success text-nowrap">
@@ -649,8 +741,8 @@ function Products() {
                                             {filteredTpList.length === 0 ? (
                                                 <tr><td colSpan="8" className="text-center py-4 text-muted fst-italic">Không có sản phẩm nào</td></tr>
                                             ) : (
-                                                filteredTpList.map((p) => (
-                                                    <React.Fragment key={p.id}>
+                                                filteredTpList.map((p, index) => (
+                                                    <React.Fragment key={`${p.id}-${index}`}>
                                                         <tr>
                                                             <td data-label="Ảnh">
                                                                 <img src={p.image ? p.image : "/no-image.png"} alt="Img" style={{ width: '45px', height: '45px', objectFit: 'cover', borderRadius: '5px', filter: showTrash ? 'grayscale(1)' : 'none' }} onError={(e) => { e.target.src = "/no-image.png" }} />
@@ -719,19 +811,58 @@ function Products() {
 
                         {(filterType === "all" || filterType === "nguyen_lieu") && (
                             <div className="mb-4">
-                                <div className="d-flex justify-content-between align-items-center mb-3">
+                                {/* 💡 THANH TÌM KIẾM VÀ NÚT LỌC CỦA NVL */}
+                                <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
                                     <h5 className="fw-bold text-warning text-dark mb-0">🛠️ Danh sách Nguyên Vật Liệu</h5>
-                                    <div className="input-group shadow-sm" style={{ width: '300px' }}>
-                                        <span className="input-group-text bg-white text-muted border-warning"><i className="fa fa-search"></i></span>
-                                        <input
-                                            type="text"
-                                            className="form-control border-warning border-start-0 ps-0"
-                                            placeholder="Tìm tên hoặc ID vật tư..."
-                                            value={searchMaterial}
-                                            onChange={(e) => { setSearchMaterial(e.target.value); setPage(1); }}
-                                        />
+                                    <div className="d-flex gap-2">
+                                        <div className="input-group shadow-sm" style={{ width: '250px' }}>
+                                            <span className="input-group-text bg-white text-muted border-warning"><i className="fa fa-search"></i></span>
+                                            <input
+                                                type="text"
+                                                className="form-control border-warning border-start-0 ps-0"
+                                                placeholder="Tìm tên hoặc ID..."
+                                                value={searchMaterial}
+                                                onChange={(e) => { setSearchMaterial(e.target.value); setPage(1); }}
+                                            />
+                                        </div>
+                                        <button className={`btn ${showFilterNVL ? 'btn-warning text-dark' : 'btn-outline-warning text-dark'} shadow-sm text-nowrap fw-bold`} onClick={() => setShowFilterNVL(!showFilterNVL)}>
+                                            <i className="fa fa-filter me-1"></i> Bộ lọc
+                                        </button>
                                     </div>
                                 </div>
+
+                                {/* 💡 BẢNG DROPDOWN LỌC NVL */}
+                                {showFilterNVL && (
+                                    <div className="card card-body bg-light mb-3 shadow-sm border-warning border-opacity-50 animate__animated animate__fadeIn">
+                                        <div className="row g-3">
+                                            <div className="col-md-6">
+                                                <label className="fw-bold small text-muted mb-1">🏢 Kho chứa</label>
+                                                <select
+                                                    className="form-select border-warning border-opacity-50"
+                                                    value={filterKhoNVL}
+                                                    onChange={e => { setFilterKhoNVL(e.target.value); setPage(1); }}
+                                                >
+                                                    <option value="">-- Tất cả Kho --</option>
+                                                    {uniqueKhoNVL.map((k, i) => <option key={i} value={k}>{k}</option>)}
+                                                </select>
+                                            </div>
+                                            <div className="col-md-6">
+                                                <label className="fw-bold small text-muted mb-1">🛠️ Tên Nguyên Vật Liệu</label>
+                                                <select className="form-select border-warning border-opacity-50" value={filterTenNVL} onChange={e => { setFilterTenNVL(e.target.value); setPage(1); }}>
+                                                    <option value="">-- Tất cả Tên --</option>
+                                                    {uniqueTenNVL.map((t, i) => <option key={i} value={t}>{t}</option>)}
+                                                </select>
+                                            </div>
+                                            {(filterKhoNVL || filterTenNVL) && (
+                                                <div className="col-12 text-end mt-2">
+                                                    <button className="btn btn-sm btn-link text-danger text-decoration-none fw-bold" onClick={() => { setFilterKhoNVL(""); setFilterTenNVL(""); setPage(1); }}>
+                                                        <i className="fa fa-times-circle me-1"></i> Xóa bộ lọc
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                                 <div className="table-responsive border rounded">
                                     <table className="table table-hover align-middle mb-0 table-mobile-cards">
                                         <thead className="table-warning text-nowrap">
@@ -749,8 +880,8 @@ function Products() {
                                             {filteredNvlList.length === 0 ? (
                                                 <tr><td colSpan="6" className="text-center py-4 text-muted fst-italic">Không có nguyên vật liệu nào</td></tr>
                                             ) : (
-                                                filteredNvlList.map((p) => (
-                                                    <React.Fragment key={p.id}>
+                                                filteredNvlList.map((p, index) => (
+                                                    <React.Fragment key={`${p.id}-${index}`}>
                                                         <tr>
                                                             <td data-label="Tên Nguyên vật Liệu" className="fw-bold">{p.name} <div className="text-muted small">ID: {p.id}</div></td>
                                                             <td data-label="Đơn Vị Tính"><span className="badge bg-secondary">{p.unit}</span></td>

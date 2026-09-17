@@ -1,36 +1,33 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+import api from "axios";
 import logo from "../src/public/bvmt-removebg-preview.png";
 
-export default function InvoiceModal({ invoiceId, onClose }) {
-    const [invoices, setInvoices] = useState(null);
+export default function OrderPrintModal({ orderId, onClose }) {
+    const [orderData, setOrderData] = useState(null);
     const [paperSize, setPaperSize] = useState("A5");
     const token = localStorage.getItem("token");
 
     const formatDate = (dateString) => {
         const date = new Date(dateString);
         date.setHours(date.getHours() + 7);
-        return date.toLocaleString('vi-VN', {
-            hour: '2-digit', minute: '2-digit',
-            day: '2-digit', month: '2-digit', year: 'numeric'
-        });
+        return date.toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
     };
 
     const formatMoney = (value) => Number(value).toLocaleString("vi-VN");
     const maskPhone = (phone) => phone && phone.length > 5 ? `${phone.slice(0, 3)}***${phone.slice(-2)}` : phone;
 
     useEffect(() => {
-        const fetchInvoice = async () => {
+        const fetchOrder = async () => {
             try {
-                const res = await axios.get(`/api/invoice/${invoiceId}`, { headers: { Authorization: `Bearer ${token}` } });
-                setInvoices(res.data);
-            } catch (error) { console.error("Lỗi lấy hóa đơn", error); }
+                const res = await api.get(`api/sales-orders/${orderId}`, { headers: { Authorization: `Bearer ${token}` } });
+                setOrderData(res.data);
+            } catch (error) { console.error("Lỗi lấy đơn hàng", error); }
         };
-        if (invoiceId) fetchInvoice();
-    }, [invoiceId]);
+        if (orderId) fetchOrder();
+    }, [orderId]);
 
     const handlePrint = () => {
-        const printElement = document.getElementById("printable-invoice");
+        const printElement = document.getElementById("printable-order");
         if (!printElement) return;
 
         const printStyles = paperSize === "80mm"
@@ -53,6 +50,7 @@ export default function InvoiceModal({ invoiceId, onClose }) {
                 #print-wrapper th { font-weight: bold !important; background-color: #f0f0f0 !important; -webkit-print-color-adjust: exact; }
                 #print-wrapper .fs-large { font-size: 18px !important; }
             `;
+
         const printContent = printElement.innerHTML;
         const originalContent = document.body.innerHTML;
         document.body.className = "";
@@ -71,36 +69,48 @@ export default function InvoiceModal({ invoiceId, onClose }) {
         window.location.reload();
     };
 
-    if (!invoices) return <div className="text-center p-5 text-white">Loading...</div>;
+    if (!orderData) return <div className="text-center p-5 text-white">Loading...</div>;
 
-    const { items } = invoices;
-    let total = 0; items.forEach(i => { total += i.quantity * i.sell_price; });
-    const deposit = Number(invoices.deposit_amount) || 0;
-    const deliveryFee = Number(invoices.delivery_fee) || 0;
-    const finalTotal = total + deposit + deliveryFee;
-    const paidAmount = Number(invoices.paid_amount) || 0;
-    const debtAmount = finalTotal > paidAmount ? finalTotal - paidAmount : 0;
+    const { details } = orderData;
+    let itemsToPrint = details.map(d => {
+        const thieuKhach = (d.ordered_quantity || 0) - (d.delivered_quantity || 0);
+        const xuongLam = (d.produced_quantity || 0);
+        let smart_deliver = xuongLam > 0 ? Math.max(0, xuongLam - (d.delivered_quantity || 0)) : thieuKhach;
+        return { ...d, actual_deliver: Math.min(smart_deliver, thieuKhach) };
+    }).filter(d => d.actual_deliver > 0);
+
+    let isReviewMode = itemsToPrint.length === 0;
+    if (isReviewMode) {
+        itemsToPrint = details.map(d => ({ ...d, actual_deliver: d.ordered_quantity }));
+    }
+
+    const deposit = Number(orderData.bottle_deposit) || 0;
+    const deliveryFee = Number(orderData.delivery_fee) || 0;
+    const advancePayment = Number(orderData.advance_payment) || 0;
+    const totalGoods = itemsToPrint.reduce((sum, item) => sum + (item.actual_deliver * item.unit_price), 0);
+    const finalTotal = totalGoods + deposit + deliveryFee;
+    const remainingToCollect = finalTotal - advancePayment;
 
     return (
         <>
             <div className="modal fade show d-block" style={{ backgroundColor: "rgba(0,0,0,0.6)" }}>
-                <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: paperSize === '80mm' ? '400px' : '600px' }}>
+                <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: paperSize === '80mm' ? '400px' : '650px' }}>
                     <div className="modal-content border-0 shadow-lg">
 
-                        <div className="modal-header bg-primary text-white d-print-none border-0">
-                            <h5 className="modal-title fw-bold"><i className="bi bi-receipt me-2"></i>Xem trước Hóa Đơn</h5>
+                        <div className="modal-header bg-dark text-white d-print-none border-0">
+                            <h5 className="modal-title fw-bold"><i className="bi bi-truck me-2"></i>In Phiếu Giao Hàng</h5>
                             <button className="btn-close btn-close-white" onClick={onClose}></button>
                         </div>
 
                         <div className="bg-light p-2 text-center d-print-none border-bottom">
                             <span className="fw-bold me-3">Chọn khổ in:</span>
                             <div className="btn-group shadow-sm">
-                                <button className={`btn btn-sm ${paperSize === 'A5' ? 'btn-primary fw-bold' : 'btn-outline-primary'}`} onClick={() => setPaperSize('A5')}>Khổ A4/A5</button>
-                                <button className={`btn btn-sm ${paperSize === '80mm' ? 'btn-primary fw-bold' : 'btn-outline-primary'}`} onClick={() => setPaperSize('80mm')}>Bill 80mm</button>
+                                <button className={`btn btn-sm ${paperSize === 'A5' ? 'btn-dark fw-bold' : 'btn-outline-dark'}`} onClick={() => setPaperSize('A5')}>Khổ A4/A5</button>
+                                <button className={`btn btn-sm ${paperSize === '80mm' ? 'btn-dark fw-bold' : 'btn-outline-dark'}`} onClick={() => setPaperSize('80mm')}>Bill 80mm</button>
                             </div>
                         </div>
 
-                        <div className="modal-body p-4" id="printable-invoice" style={{ backgroundColor: '#fff', color: '#000', fontFamily: 'Arial, sans-serif' }}>
+                        <div className="modal-body p-4" id="printable-order" style={{ backgroundColor: '#fff', color: '#000', fontFamily: 'Arial, sans-serif' }}>
                             <div className="hospital-header text-center" style={{ marginBottom: paperSize === 'A5' ? '15px' : '8px' }}>
                                 <img src={logo} alt="Logo" style={{ width: paperSize === 'A5' ? '150px' : '120px', height: 'auto', objectFit: 'contain' }} />
                                 <div className="fw-bold fs-large" style={{ textTransform: 'uppercase' }}>MITAFRESH</div>
@@ -108,14 +118,17 @@ export default function InvoiceModal({ invoiceId, onClose }) {
                                 <div className="fw-bold">SĐT: 0824 009 779 - 0973 141 307</div>
                             </div>
 
-                            <h5 className="text-center fw-bold text-uppercase fs-large" style={{ paddingBottom: '10px' }}>PHIẾU THU TIỀN</h5>
+                            <h5 className="text-center fw-bold text-uppercase fs-large" style={{ paddingBottom: '10px' }}>
+                                {isReviewMode ? "PHIẾU TỔNG KẾT ĐƠN" : "PHIẾU GIAO HÀNG"}
+                            </h5>
 
                             <div className="fw-bold" style={{ lineHeight: '1.5', marginBottom: '15px' }}>
-                                <div>Mã hóa đơn: <b>#{invoiceId}</b></div>
-                                <div>Khách hàng: {invoices.customer_name || "Khách vãng lai"} {invoices.phone ? `- ${maskPhone(invoices.phone)}` : ''}</div>
-                                <div>Địa chỉ: {invoices.customer_address || '---'}</div>
-                                <div>Ngày: {invoices.created_at ? formatDate(invoices.created_at) : '---'}</div>
-                                {invoices.shipper_name && <div>Người giao: {invoices.shipper_name}</div>}
+                                <div>Mã Đơn: <b>{orderData.order_code}</b></div>
+                                <div>Khách hàng: {orderData.customer_name} {orderData.customer_phone ? `- ${maskPhone(orderData.customer_phone)}` : ''}</div>
+                                <div>Địa chỉ: {orderData.customer_address || '---'}</div>
+                                <div>Ngày đặt: {orderData.created_at ? formatDate(orderData.created_at) : '---'}</div>
+                                {orderData.shipper_name && <div>Người giao: <b>{orderData.shipper_name}</b></div>}
+                                {orderData.note && <div style={{ fontStyle: 'italic', border: '1px dashed #ccc', padding: '3px 5px', marginTop: '3px' }}>Ghi chú: {orderData.note}</div>}
                             </div>
 
                             {paperSize === 'A5' ? (
@@ -123,18 +136,18 @@ export default function InvoiceModal({ invoiceId, onClose }) {
                                     <thead>
                                         <tr>
                                             <th>Sản phẩm</th>
-                                            <th>SL</th>
+                                            <th>SL Giao</th>
                                             <th>Đơn giá</th>
                                             <th>Thành tiền</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {items.map((item, i) => (
+                                        {itemsToPrint.map((item, i) => (
                                             <tr key={i}>
                                                 <td className="text-start">{item.product_name}</td>
-                                                <td>{item.quantity}</td>
-                                                <td>{formatMoney(item.sell_price)}</td>
-                                                <td className="text-end fw-bold">{formatMoney(item.sell_price * item.quantity)} đ</td>
+                                                <td className="fs-large">{item.actual_deliver}</td>
+                                                <td>{formatMoney(item.unit_price)}</td>
+                                                <td className="text-end fw-bold">{formatMoney(item.unit_price * item.actual_deliver)} đ</td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -148,13 +161,13 @@ export default function InvoiceModal({ invoiceId, onClose }) {
                                         <div className="text-end" style={{ flex: 2 }}>Thành tiền</div>
                                     </div>
                                     <div style={{ borderBottom: '1px dashed #000', marginBottom: '8px' }}></div>
-                                    {items.map((item, i) => (
+                                    {itemsToPrint.map((item, i) => (
                                         <div key={i} className="mb-2 fw-bold">
                                             <div>{item.product_name}</div>
                                             <div className="d-flex">
-                                                <div style={{ flex: 2 }}>{formatMoney(item.sell_price)}</div>
-                                                <div className="text-center" style={{ flex: 1 }}>{item.quantity}</div>
-                                                <div className="text-end" style={{ flex: 2 }}>{formatMoney(item.sell_price * item.quantity)} đ</div>
+                                                <div style={{ flex: 2 }}>{formatMoney(item.unit_price)}</div>
+                                                <div className="text-center">{item.actual_deliver}</div>
+                                                <div className="text-end" style={{ flex: 2 }}>{formatMoney(item.unit_price * item.actual_deliver)} đ</div>
                                             </div>
                                         </div>
                                     ))}
@@ -162,16 +175,18 @@ export default function InvoiceModal({ invoiceId, onClose }) {
                                 </>
                             )}
 
-                            {/* 💡 ĐÃ SỬA CHỖ NÀY: ÉP FULL 100% WIDTH CHO PHẲNG PHIU */}
+                            {/* 💡 ĐÃ SỬA: ÉP FULL 100% WIDTH */}
                             <div style={{ width: '100%' }}>
                                 <div className="d-flex justify-content-between mb-1 fw-bold">
                                     <span>Tiền hàng:</span>
-                                    <span>{formatMoney(total)} đ</span>
+                                    <span>{formatMoney(totalGoods)} đ</span>
                                 </div>
-                                <div className="d-flex justify-content-between mb-1 fw-bold">
-                                    <span>Tiền cọc vỏ:</span>
-                                    <span>{formatMoney(deposit)} đ</span>
-                                </div>
+                                {deposit > 0 && (
+                                    <div className="d-flex justify-content-between mb-1 fw-bold">
+                                        <span>Tạm tính cọc vỏ:</span>
+                                        <span>{formatMoney(deposit)} đ</span>
+                                    </div>
+                                )}
                                 {deliveryFee > 0 && (
                                     <div className="d-flex justify-content-between mb-1 fw-bold">
                                         <span>Phí giao hàng:</span>
@@ -179,29 +194,29 @@ export default function InvoiceModal({ invoiceId, onClose }) {
                                     </div>
                                 )}
                                 <div className="d-flex justify-content-between fw-bold mt-2 pt-2 fs-large" style={{ borderTop: '2px solid #000' }}>
-                                    <span>TỔNG CỘNG:</span>
+                                    <span>TỔNG ĐƠN:</span>
                                     <span>{formatMoney(finalTotal)} đ</span>
                                 </div>
-                                <div className="d-flex justify-content-between mt-1 fw-bold">
-                                    <span>Khách đã trả:</span>
-                                    <span>{formatMoney(paidAmount)} đ</span>
-                                </div>
-                                {debtAmount > 0 && (
-                                    <div className="d-flex justify-content-between fw-bold mt-1 pt-1" style={{ borderTop: '1px dashed #000' }}>
-                                        <span>CÒN NỢ LẠI:</span>
-                                        <span>{formatMoney(debtAmount)} đ</span>
+                                {advancePayment > 0 && (
+                                    <div className="d-flex justify-content-between mt-1 fw-bold" style={{ color: '#555' }}>
+                                        <span>Khách đã cọc trước:</span>
+                                        <span>- {formatMoney(advancePayment)} đ</span>
                                     </div>
                                 )}
+                                <div className="d-flex justify-content-between fw-bold mt-1 pt-1" style={{ borderTop: '1px dashed #000', fontSize: '16px' }}>
+                                    <span>SHIPPER THU:</span>
+                                    <span style={{ padding: '2px 8px', borderRadius: '4px' }}>{formatMoney(remainingToCollect)} đ</span>
+                                </div>
                             </div>
 
                             {paperSize === 'A5' && (
                                 <div className="d-flex justify-content-between text-center fw-bold mt-3 pt-3">
                                     <div>
-                                        <p>Người lập phiếu</p>
+                                        <p>Người giao hàng</p>
                                         <p style={{ marginTop: '65px', fontStyle: 'italic', fontSize: '12px' }}>(Ký, ghi rõ họ tên)</p>
                                     </div>
                                     <div>
-                                        <p>Khách hàng / Người nhận</p>
+                                        <p>Khách hàng nhận</p>
                                         <p style={{ marginTop: '65px', fontStyle: 'italic', fontSize: '12px' }}>(Ký, ghi rõ họ tên)</p>
                                     </div>
                                 </div>
@@ -235,8 +250,8 @@ export default function InvoiceModal({ invoiceId, onClose }) {
                         </div>
 
                         <div className="modal-footer bg-light d-print-none border-0">
-                            <button className="btn btn-primary px-4 fw-bold shadow-sm" onClick={handlePrint}>
-                                <i className="bi bi-printer me-2"></i>IN HÓA ĐƠN ({paperSize})
+                            <button className="btn btn-dark px-4 fw-bold shadow-sm" onClick={handlePrint}>
+                                <i className="bi bi-printer me-2"></i>IN PHIẾU ({paperSize})
                             </button>
                             <button className="btn btn-secondary px-4 fw-bold shadow-sm" onClick={onClose}>Đóng</button>
                         </div>
