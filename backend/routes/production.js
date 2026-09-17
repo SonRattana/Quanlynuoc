@@ -20,7 +20,7 @@ router.get("/finished-goods", verifyToken, async (req, res) => {
 router.post("/", verifyToken, async (req, res) => {
     const connection = await db.getConnection();
     try {
-        const { product_id, quantity, materials, note } = req.body;
+        const { product_id, quantity, materials, note, ref_sales_order_id } = req.body;
         const prodQty = Number(quantity);
 
         if (!product_id || prodQty <= 0 || !materials || materials.length === 0) {
@@ -31,9 +31,9 @@ router.post("/", verifyToken, async (req, res) => {
 
         // 💡 1. Tạo Lệnh SX trước để lấy poId
         const [poResult] = await connection.query(
-            `INSERT INTO production_orders (product_id, quantity, total_cost, unit_cost, note, cost_status) 
-             VALUES (?, ?, 0, 0, ?, 'TEMP')`,
-            [product_id, prodQty, note || ""]
+            `INSERT INTO production_orders (product_id, quantity, total_cost, unit_cost, note, cost_status, ref_sales_order_id) 
+             VALUES (?, ?, 0, 0, ?, 'TEMP', ?)`,
+            [product_id, prodQty, note || "", ref_sales_order_id || null]
         );
         const poId = poResult.insertId;
 
@@ -58,12 +58,19 @@ router.post("/", verifyToken, async (req, res) => {
             // Nếu không tìm thấy kho nào đủ, mặc định kho 2 hoặc báo lỗi
             const targetWarehouseId = warehouseItems.length > 0 ? warehouseItems[0].warehouse_id : 2;
 
-            // 3. FIFO
+            // 3. KIỂM TRA TỒN KHO TRƯỚC KHI CHẠY FIFO
             const [batches] = await connection.query(
                 `SELECT id, quantity_remaining, cost_price FROM inventory_batches 
                  WHERE product_id = ? AND quantity_remaining > 0 
                  ORDER BY created_at ASC FOR UPDATE`, [bom.material_id]
             );
+
+            // 💡 CHỐT CHẶN AN TOÀN: Báo lỗi và dừng ngay lập tức nếu không đủ vật tư
+            const totalAvailable = batches.reduce((sum, b) => sum + Number(b.quantity_remaining), 0);
+            if (totalAvailable < requiredQty) {
+                const [mat] = await connection.query("SELECT name FROM products WHERE id = ?", [bom.material_id]);
+                throw new Error(`⛔ Lỗi: Kho không đủ vật tư [${mat[0]?.name}]. Cần dùng ${requiredQty}, nhưng hiện chỉ còn ${totalAvailable}. Vui lòng nhập thêm vật tư!`);
+            }
 
             let remainingToFulfill = requiredQty;
             for (const batch of batches) {
@@ -107,6 +114,15 @@ router.post("/", verifyToken, async (req, res) => {
         }
 
         await connection.commit();
+        // 💡 2. Nếu lệnh SX này có gắn Đơn Đặt Hàng, tự động cộng tiến độ
+        if (ref_sales_order_id) {
+            await db.query(`
+                UPDATE sales_order_details 
+                SET produced_quantity = produced_quantity + ? 
+                WHERE sales_order_id = ? AND product_id = ?
+            `, [prodQty, ref_sales_order_id, product_id]);
+        }
+
         res.json({ message: "Sản xuất thành công!", produced_qty: prodQty, unit_cost: unitCost });
 
     } catch (err) {

@@ -176,14 +176,14 @@ router.delete("/:id", verifyToken, async (req, res) => {
     const totalStock = Number(stockRows[0]?.total_stock || 0);
 
     if (totalStock !== 0) {
-      return res.status(400).json({ message: `Không thể xóa! Sản phẩm này vẫn còn tồn kho (${totalStock} sản phẩm). Sếp phải làm phiếu xuất hủy hoặc chuyển kho hết về số 0 trước khi ẩn.` });
+      return res.status(400).json({ message: `Không thể xóa! Sản phẩm này vẫn còn tồn kho (${totalStock} sản phẩm). Bạn phải làm phiếu xuất hủy hoặc chuyển kho hết về số 0 trước khi ẩn.` });
     }
 
     const [depositRows] = await db.query("SELECT COUNT(*) as active_deposits FROM bottle_deposits WHERE product_id = ? AND status = 'dang_giu'", [id]);
     const activeDeposits = Number(depositRows[0]?.active_deposits || 0);
 
     if (activeDeposits > 0) {
-      return res.status(400).json({ message: `Không thể xóa! Vẫn còn khách hàng đang giữ vỏ của loại sản phẩm này. Sếp phải xử lý thu hồi/hoàn tiền cọc vỏ hết đã.` });
+      return res.status(400).json({ message: `Không thể xóa! Vẫn còn khách hàng đang giữ vỏ của loại sản phẩm này. Bạn phải xử lý thu hồi/hoàn tiền cọc vỏ hết đã.` });
     }
 
     const [product] = await db.query("SELECT * FROM products WHERE id = ?", [id]);

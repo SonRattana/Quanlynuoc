@@ -57,7 +57,8 @@ app.use("/api/bom", require("./routes/bom"));
 app.use("/api/purchases", require("./routes/purchases"));
 app.use("/api/production", require("./routes/production"));
 app.use("/api/expenses", require("./routes/expenses"));
-
+app.use("/api/sales-orders", require("./routes/salesOrders"));
+app.use("/api/bottle-deposits", require("./routes/bottleDeposits"));
 // Thư mục chứa hình ảnh tĩnh
 app.use('/uploads', express.static('uploads'));
 

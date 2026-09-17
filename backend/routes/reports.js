@@ -86,10 +86,10 @@ router.get('/revenue', verifyToken, async (req, res) => {
                 i.created_at,
                 i.shipper_name,
                 i.unreturned_bottles,
-                '' AS note, 
-                c.name AS customer_name,
-                c.phone,
-                COALESCE(c.address, '') AS address, 
+                i.note, 
+                COALESCE(i.customer_name, c.name, so.customer_name) AS customer_name,
+                COALESCE(i.phone, c.phone, so.customer_phone) AS phone,
+                COALESCE(i.customer_address, c.address, so.customer_address) AS address, 
                 p.name AS product_name,
                 p.unit,
                 ii.quantity,
@@ -97,7 +97,9 @@ router.get('/revenue', verifyToken, async (req, res) => {
                 (ii.quantity * ii.sell_price) AS thanh_tien,
                 (ii.quantity * COALESCE(p.deposit_price, 0)) AS the_chan
             FROM invoices i 
-            LEFT JOIN customers c ON i.customer_id = c.id
+            LEFT JOIN customers c ON i.customer_id = c.id -- 💡 Đổi thành LEFT JOIN để không mất Khách lẻ
+            LEFT JOIN stock_transactions st ON i.ref_export_log_id = st.id
+            LEFT JOIN sales_orders so ON st.ref_sales_order_id = so.id
             JOIN invoice_items ii ON i.id = ii.invoice_id
             JOIN products p ON ii.product_id = p.id
             WHERE i.created_at >= ? AND i.created_at <= ?
@@ -110,25 +112,42 @@ router.get('/revenue', verifyToken, async (req, res) => {
         res.status(500).json([]);
     }
 });
-
 // API: Lấy báo cáo công nợ vỏ bình
 router.get('/bottles', verifyToken, async (req, res) => {
     try {
         const [rows] = await db.query(`
             SELECT 
                 c.customer_code,
-                c.name AS customer_name,
-                c.phone,
-                c.address AS customer_address,
+                -- 💡 Moi tên thật từ Đơn Đặt Hàng cho báo cáo
+                COALESCE(c.name, i.customer_name, so.customer_name, 'Khách vãng lai') AS customer_name,
+                COALESCE(c.phone, i.phone, so.customer_phone, '') AS phone,
+                COALESCE(c.address, i.customer_address, so.customer_address, '') AS customer_address,
+                COALESCE(p.name, 'Vỏ bình cũ') AS product_name, 
+                
                 SUM(CASE WHEN b.type = 'deposit' THEN b.quantity ELSE 0 END) AS total_borrowed,
                 SUM(CASE WHEN b.type = 'refund' THEN b.quantity ELSE 0 END) AS total_returned,
                 SUM(CASE WHEN b.type = 'deposit' THEN b.quantity ELSE -b.quantity END) AS remaining_bottles,
                 SUM(CASE WHEN b.type = 'deposit' THEN b.deposit_amount ELSE -b.deposit_amount END) AS total_deposit
-            FROM customers c
-            JOIN bottle_deposits b ON c.id = b.customer_id
-            GROUP BY c.id
+            FROM bottle_deposits b
+            LEFT JOIN customers c ON b.customer_id = c.id
+            LEFT JOIN invoices i ON b.invoice_id = i.id
+            LEFT JOIN products p ON b.product_id = p.id
+            
+            -- 💡 XÂY CẦU NỐI 
+            LEFT JOIN stock_transactions st ON i.ref_export_log_id = st.id
+            LEFT JOIN sales_orders so ON st.ref_sales_order_id = so.id
+
+            GROUP BY 
+                b.customer_id, 
+                b.product_id,
+                p.name,
+                c.customer_code, 
+                COALESCE(c.name, i.customer_name, so.customer_name, 'Khách vãng lai'), 
+                COALESCE(c.phone, i.phone, so.customer_phone, ''), 
+                COALESCE(c.address, i.customer_address, so.customer_address, '')
+                
             HAVING remaining_bottles > 0
-            ORDER BY remaining_bottles DESC
+            ORDER BY customer_name ASC, remaining_bottles DESC
         `);
         res.json(rows || []);
     } catch (err) {
@@ -340,16 +359,15 @@ router.get('/actual-revenue', verifyToken, async (req, res) => {
                 i.id AS invoice_id,
                 i.created_at,
                 i.shipper_name,
-                c.name AS customer_name,
-                c.phone,
-                c.address AS customer_address,
+                COALESCE(i.customer_name, c.name, so.customer_name) AS customer_name,
+                COALESCE(i.phone, c.phone, so.customer_phone) AS phone,
+                COALESCE(i.customer_address, c.address, so.customer_address) AS customer_address,
                 p.name AS product_name,
                 p.unit,
                 ii.quantity,
                 ii.sell_price,
                 (ii.quantity * ii.sell_price) AS subtotal,
                 
-                -- 💡 THÊM 3 DÒNG NÀY ĐỂ KÉO DÒNG TIỀN VÀO BÁO CÁO
                 i.total_amount AS inv_total,
                 i.paid_amount AS inv_paid,
                 (i.total_amount - i.paid_amount) AS inv_debt,
@@ -359,17 +377,19 @@ router.get('/actual-revenue', verifyToken, async (req, res) => {
 
             FROM invoices i
             JOIN invoice_items ii ON i.id = ii.invoice_id
-            JOIN customers c ON i.customer_id = c.id
+            LEFT JOIN customers c ON i.customer_id = c.id -- 💡 Đổi thành LEFT JOIN
+            LEFT JOIN stock_transactions st ON i.ref_export_log_id = st.id
+            LEFT JOIN sales_orders so ON st.ref_sales_order_id = so.id
             JOIN products p ON ii.product_id = p.id
             
             LEFT JOIN (
-                SELECT invoice_id, product_id, 
-                       SUM(quantity) AS remaining_bottles, 
-                       SUM(deposit_amount) AS remaining_deposit
+                SELECT invoice_id, 
+                       SUM(CASE WHEN type = 'deposit' THEN quantity ELSE -quantity END) AS remaining_bottles, 
+                       SUM(CASE WHEN type = 'deposit' THEN deposit_amount ELSE -deposit_amount END) AS remaining_deposit
                 FROM bottle_deposits
-                WHERE status = 'dang_giu' AND type = 'deposit'
-                GROUP BY invoice_id, product_id
-            ) bd ON i.id = bd.invoice_id AND ii.product_id = bd.product_id
+                WHERE invoice_id IS NOT NULL
+                GROUP BY invoice_id
+            ) bd ON i.id = bd.invoice_id 
             
             WHERE i.created_at BETWEEN ? AND ?
             ORDER BY i.created_at DESC, i.id DESC

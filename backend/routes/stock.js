@@ -82,11 +82,13 @@ router.get("/", verifyToken, async (req, res) => {
                 CONCAT(DATE_FORMAT(st.created_at, '%Y-%m-%dT%H:%i:%s'), 'Z') as created_at,
                 p.name AS product_name,
                 w1.name AS warehouse_name,
-                w2.name AS target_warehouse_name
+                w2.name AS target_warehouse_name,
+                so.order_code, so.customer_name, so.customer_phone, so.customer_address -- 💡 Lấy thêm cục thông tin Đơn Hàng
              FROM stock_transactions st
              JOIN products p ON st.product_id = p.id
              LEFT JOIN warehouses w1 ON st.warehouse_id = w1.id
              LEFT JOIN warehouses w2 ON st.target_warehouse_id = w2.id
+             LEFT JOIN sales_orders so ON st.ref_sales_order_id = so.id -- 💡 Nối với bảng Đơn Đặt Hàng
              ${whereClause}
              ORDER BY st.created_at DESC
              LIMIT ? OFFSET ?`,
@@ -192,10 +194,11 @@ router.get("/inventory", verifyToken, async (req, res) => {
 });
 
 // ================= TRANSFER / EXPORT =================
-router.post("/export", verifyToken, checkRole(['admin', 'ketoan', 'sanxuat']), async (req, res) => {
+router.post("/export", verifyToken, checkRole('admin', 'ketoan', 'sanxuat'), async (req, res) => {
     const connection = await db.getConnection();
     try {
-        const { product_id, quantity, reason, warehouse_id, target_warehouse_id } = req.body;
+        // 💡 1. Bổ sung thêm ref_sales_order_id nhận từ giao diện
+        const { product_id, quantity, reason, warehouse_id, target_warehouse_id, ref_sales_order_id } = req.body;
 
         if (!product_id || !quantity || !warehouse_id)
             return res.status(400).json({ message: "Thiếu dữ liệu giao dịch" });
@@ -212,7 +215,7 @@ router.post("/export", verifyToken, checkRole(['admin', 'ketoan', 'sanxuat']), a
             throw new Error("Kho nguồn không đủ số lượng để chuyển!");
         }
 
-        // 💡 2. GỌI ĐỘNG CƠ FIFO TỰ ĐỘNG XỬ LÝ LÔ HÀNG
+        // 2. GỌI ĐỘNG CƠ FIFO TỰ ĐỘNG XỬ LÝ LÔ HÀNG
         await deductStockFIFO(connection, product_id, quantity);
 
         // 3. Trừ kho NGUỒN
@@ -221,7 +224,7 @@ router.post("/export", verifyToken, checkRole(['admin', 'ketoan', 'sanxuat']), a
             [quantity, warehouse_id, product_id]
         );
 
-        // 4. Nếu có Kho Đích -> Cộng vào Kho ĐÍCH
+        // 4. Cập nhật kho ĐÍCH hoặc trừ Tổng kho
         if (target_warehouse_id) {
             const [targetRows] = await connection.query(
                 "SELECT quantity FROM warehouse_products WHERE warehouse_id = ? AND product_id = ?",
@@ -240,7 +243,6 @@ router.post("/export", verifyToken, checkRole(['admin', 'ketoan', 'sanxuat']), a
                 );
             }
         } else {
-            // Xuất hủy -> Trừ kho tổng
             await connection.query(
                 "UPDATE products SET quantity = quantity - ? WHERE id = ?",
                 [quantity, product_id]
@@ -249,12 +251,22 @@ router.post("/export", verifyToken, checkRole(['admin', 'ketoan', 'sanxuat']), a
 
         const transType = target_warehouse_id ? 'transfer' : 'damaged';
 
+        // 💡 5. LƯU MÃ ĐƠN HÀNG VÀO LỊCH SỬ KHO (stock_transactions)
         await connection.query(
             `INSERT INTO stock_transactions 
-            (product_id, warehouse_id, target_warehouse_id, type, quantity, reason, transaction_type) 
-            VALUES (?, ?, ?, 'export', ?, ?, ?)`,
-            [product_id, warehouse_id, target_warehouse_id || null, quantity, reason || "Chuyển kho", transType]
+            (product_id, warehouse_id, target_warehouse_id, type, quantity, reason, transaction_type, ref_sales_order_id) 
+            VALUES (?, ?, ?, 'export', ?, ?, ?, ?)`,
+            [product_id, warehouse_id, target_warehouse_id || null, quantity, reason || "Xuất kho", transType, ref_sales_order_id || null]
         );
+
+        // 💡 6. TỰ ĐỘNG CỘNG TIẾN ĐỘ "ĐÃ GIAO" VÀO ĐƠN ĐẶT HÀNG
+        // if (ref_sales_order_id && !target_warehouse_id) {
+        //     await connection.query(`
+        //         UPDATE sales_order_details 
+        //         SET delivered_quantity = delivered_quantity + ? 
+        //         WHERE sales_order_id = ? AND product_id = ?
+        //     `, [quantity, ref_sales_order_id, product_id]);
+        // }
 
         await logAction(req, "EXPORT_STOCK", "stock_transactions", null, null, req.body, "Xuất/Chuyển kho: " + reason);
 
