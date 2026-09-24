@@ -25,7 +25,7 @@ router.get("/", verifyToken, async (req, res) => {
       SELECT 
         p.id, p.name, p.volume, p.unit, p.cost_price, p.sell_price, 
         p.deposit_price, p.image, p.wholesale_price, p.wholesale_min_quantity, 
-        p.requires_deposit, p.item_type,
+        p.requires_deposit, p.item_type, p.size_group,
         IFNULL(wp.quantity, 0) AS quantity,
         IFNULL(w.name, 'Kho Tổng') AS warehouse_name /* 💡 ĐIỂM ĂN TIỀN 1: Lấy tên kho */
       FROM products p

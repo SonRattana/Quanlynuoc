@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { verifyToken } = require('../middleware/authMiddleware');
+const { logAction } = require('../utils/logger'); // 💡 BỔ SUNG AUDIT LOG
 
 // ==========================================
 // 1. TỔNG HỢP DANH SÁCH NỢ VỎ (ĐÃ TÁCH THEO SẢN PHẨM & HIỆN TÊN KHÁCH LẺ)
@@ -50,23 +51,24 @@ router.get('/summary', verifyToken, async (req, res) => {
 });
 
 // ==========================================
-// 2. XỬ LÝ TRẢ VỎ (NHẬN DIỆN ĐÚNG LOẠI VỎ)
+// 2. XỬ LÝ TRẢ VỎ (NHẬN DIỆN ĐÚNG LOẠI VỎ & CÓ GHI CHÚ)
 // ==========================================
 router.post('/return', verifyToken, async (req, res) => {
-    // 💡 Hứng thêm biến product_id từ Frontend gửi lên
-    const { customer_id, invoice_id, product_id, return_qty, deposit_price } = req.body;
+    const { customer_id, invoice_id, product_id, return_qty, deposit_price, note } = req.body;
     const refundAmount = return_qty * deposit_price;
 
     const connection = await db.getConnection();
     try {
         await connection.beginTransaction();
 
-        // Lưu thông tin trả vỏ có gắn kèm Mã sản phẩm
-        await connection.query(
-            `INSERT INTO bottle_deposits (customer_id, invoice_id, product_id, quantity, deposit_amount, status, type, created_at) 
-             VALUES (?, ?, ?, ?, ?, 'da_tra', 'refund', NOW())`,
-            [customer_id || null, invoice_id || null, product_id || null, return_qty, refundAmount]
+        // Lưu thông tin trả vỏ có gắn kèm Mã sản phẩm và Ghi chú (Nếu lủng, vỡ...)
+        const [result] = await db.query(
+            `INSERT INTO bottle_deposits (customer_id, invoice_id, product_id, type, quantity, deposit_amount, note) 
+             VALUES (?, ?, ?, 'refund', ?, ?, ?)`,
+            [customer_id, invoice_id, product_id, return_qty, refundAmount, note || '']
         );
+        
+        const depositRecordId = result.insertId;
 
         if (customer_id) {
             await connection.query(
@@ -76,6 +78,14 @@ router.post('/return', verifyToken, async (req, res) => {
         }
 
         await connection.commit();
+        
+        // 💡 GHI AUDIT LOG THAO TÁC THU VỎ VÀ HOÀN TIỀN
+        const logMsg = note 
+            ? `Thu ${return_qty} vỏ, hoàn ${refundAmount.toLocaleString('vi-VN')}đ. Ghi chú: ${note}` 
+            : `Thu ${return_qty} vỏ bình thường, hoàn ${refundAmount.toLocaleString('vi-VN')}đ`;
+            
+        await logAction(req, "CREATE", "bottle_deposits", depositRecordId, null, req.body, logMsg);
+
         res.json({ message: `Đã thu về ${return_qty} vỏ và hoàn lại ${refundAmount.toLocaleString('vi-VN')}đ tiền cọc.` });
 
     } catch (error) {
@@ -88,7 +98,7 @@ router.post('/return', verifyToken, async (req, res) => {
 });
 
 // ==========================================
-// 3. XEM LỊCH SỬ NỢ / TRẢ VỎ (API BỔ SUNG)
+// 3. XEM LỊCH SỬ NỢ / TRẢ VỎ
 // ==========================================
 router.get('/history', verifyToken, async (req, res) => {
     try {

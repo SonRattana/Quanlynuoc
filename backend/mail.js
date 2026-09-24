@@ -103,7 +103,7 @@ const sendOrderEmail = async (orderDetail) => {
             <!-- FOOTER -->
             <div style="background-color: #f1f3f5; padding: 20px; text-align: center; color: #6c757d; font-size: 13px;">
                 <p style="margin: 0 0 5px; font-weight: bold; color: #343a40;">Mita Fresh</p>
-                <p style="margin: 0 0 5px;">Mọi thắc mắc xin vui lòng liên hệ Zalo/Hotline.</p>
+                <p style="margin: 0 0 5px;">Mọi thắc mắc xin vui lòng liên hệ Zalo/Hotline: 0824009779.</p>
                 <p style="margin: 0; font-style: italic;">Hân hạnh được phục vụ quý khách!</p>
             </div>
         </div>

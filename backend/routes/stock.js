@@ -80,7 +80,7 @@ router.get("/", verifyToken, async (req, res) => {
             `SELECT 
                 st.id, st.type, st.quantity, st.reason, 
                 CONCAT(DATE_FORMAT(st.created_at, '%Y-%m-%dT%H:%i:%s'), 'Z') as created_at,
-                p.name AS product_name,
+                p.name AS product_name, p.unit,
                 w1.name AS warehouse_name,
                 w2.name AS target_warehouse_name,
                 so.order_code, so.customer_name, so.customer_phone, so.customer_address -- 💡 Lấy thêm cục thông tin Đơn Hàng
@@ -281,7 +281,7 @@ router.post("/export", verifyToken, checkRole('admin', 'ketoan', 'sanxuat'), asy
 });
 
 // ================= THÊM KHO MỚI =================
-router.post("/warehouses", verifyToken, verifyToken, checkRole(['admin', 'sanxuat']), async (req, res) => {
+router.post("/warehouses", verifyToken, verifyToken, checkRole('admin', 'sanxuat'), async (req, res) => {
     try {
         const { name } = req.body;
         if (!name || name.trim() === "") {
@@ -303,7 +303,7 @@ router.post("/warehouses", verifyToken, verifyToken, checkRole(['admin', 'sanxua
 });
 
 // ================= SỬA TÊN KHO =================
-router.put("/warehouses/:id", verifyToken, checkRole(['admin', 'sanxuat']), async (req, res) => {
+router.put("/warehouses/:id", verifyToken, checkRole('admin', 'sanxuat'), async (req, res) => {
     try {
         const { name } = req.body;
         if (!name || name.trim() === "") return res.status(400).json({ message: "Tên kho không được bỏ trống!" });
@@ -317,7 +317,7 @@ router.put("/warehouses/:id", verifyToken, checkRole(['admin', 'sanxuat']), asyn
 });
 
 // ================= XÓA KHO =================
-router.delete("/warehouses/:id", verifyToken, checkRole(['admin']), async (req, res) => {
+router.delete("/warehouses/:id", verifyToken, checkRole('admin'), async (req, res) => {
     try {
         const warehouseId = req.params.id;
 
@@ -452,7 +452,7 @@ router.get("/internal-issues/history", verifyToken, async (req, res) => {
             SELECT 
                 st.id,
                 CONCAT(DATE_FORMAT(st.created_at, '%d/%m/%Y %H:%i:%s')) as created_at,
-                p.name AS product_name,
+                p.name AS product_name, p.unit,
                 w.name AS warehouse_name,
                 st.quantity,
                 p.cost_price,

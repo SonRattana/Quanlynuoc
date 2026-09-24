@@ -3,15 +3,14 @@ const router = express.Router();
 const db = require('../db');
 const { verifyToken } = require('../middleware/authMiddleware');
 
-// ================= 📊 API TRÙM CUỐI: BÁO CÁO LÃI LỖ (P&L) ĐÃ NÂNG CẤP =================
+// ================= 📊 API TRÙM CUỐI: BÁO CÁO LÃI LỖ (P&L) ĐÃ NÂNG CẤP DÒNG TIỀN VỎ =================
 router.get('/pnl', verifyToken, async (req, res) => {
     try {
         const { startDate, endDate } = req.query;
         const startDateTime = `${startDate} 00:00:00`;
         const endDateTime = `${endDate} 23:59:59`;
 
-        // 1. LẤY DỮ LIỆU TỔNG: DOANH THU & GIÁ VỐN 
-        // (💡 Dùng ii.cost_price thay vì p.cost_price để giữ đúng giá vốn lịch sử lúc xuất bán)
+        // 1. LẤY DỮ LIỆU TỔNG: DOANH THU & GIÁ VỐN (Đã bao gồm Hao hụt vật tư trong xưởng)
         const [salesData] = await db.query(`
             SELECT 
                 IFNULL(SUM(ii.quantity * ii.sell_price), 0) AS total_revenue,
@@ -24,20 +23,32 @@ router.get('/pnl', verifyToken, async (req, res) => {
         const totalRevenue = Number(salesData[0].total_revenue);
         const totalCOGS = Number(salesData[0].total_cogs);
 
-        // 2. LẤY DỮ LIỆU CHI PHÍ HOẠT ĐỘNG (Giữ nguyên logic cực chuẩn của sếp)
+        // 2. LẤY DỮ LIỆU CHI PHÍ HOẠT ĐỘNG THƯỜNG XUYÊN
         const [expenseData] = await db.query(`
             SELECT IFNULL(SUM(amount), 0) AS total_expenses
             FROM expenses
             WHERE expense_date >= ? AND expense_date <= ?
         `, [startDate, endDate]);
-
         const totalExpenses = Number(expenseData[0].total_expenses);
 
-        // Tính toán lợi nhuận
-        const grossProfit = totalRevenue - totalCOGS;
-        const netProfit = grossProfit - totalExpenses;
+        // 💡 3. LẤY CHI PHÍ THIỆT HẠI / XUẤT HỦY VỎ BÌNH TỪ KHÁCH TRẢ
+        const [bottleLossData] = await db.query(`
+            SELECT IFNULL(SUM(b.quantity * COALESCE(p.cost_price, 0)), 0) AS total_bottle_loss
+            FROM bottle_deposits b
+            JOIN products p ON b.product_id = p.id
+            WHERE b.type = 'refund' 
+              AND b.note IS NOT NULL 
+              AND b.note NOT IN ('Hoàn vỏ bình thường', '')
+              AND b.created_at >= ? AND b.created_at <= ?
+        `, [startDateTime, endDateTime]);
 
-        // 3. LẤY DỮ LIỆU CHI TIẾT TỪNG MẶT HÀNG (Tính năng mới)
+        const totalBottleLoss = Number(bottleLossData[0].total_bottle_loss);
+
+        // 💡 4. TÍNH TOÁN LỢI NHUẬN (Trừ sạch cả Chi phí và Tiền vỏ vứt đi)
+        const grossProfit = totalRevenue - totalCOGS;
+        const netProfit = grossProfit - totalExpenses - totalBottleLoss;
+
+        // 5. LẤY DỮ LIỆU CHI TIẾT TỪNG MẶT HÀNG
         const [detailRows] = await db.query(`
             SELECT 
                 p.name AS product_name,
@@ -54,13 +65,13 @@ router.get('/pnl', verifyToken, async (req, res) => {
             ORDER BY gross_profit DESC
         `, [startDateTime, endDateTime]);
 
-        // 4. TRẢ VỀ JSON CÓ CẢ 2 PHẦN (SUMMARY VÀ DETAILS) CHO FRONTEND
         res.json({
             summary: {
                 total_revenue: totalRevenue,
                 total_cogs: totalCOGS,
                 gross_profit: grossProfit,
                 total_expenses: totalExpenses,
+                total_bottle_loss: totalBottleLoss, // Ném cục thiệt hại này ra cho FE
                 net_profit: netProfit
             },
             details: detailRows || []
@@ -68,7 +79,6 @@ router.get('/pnl', verifyToken, async (req, res) => {
 
     } catch (err) {
         console.error("LỖI API BÁO CÁO P&L:", err.message);
-        // Trả về cấu trúc rỗng để Frontend không bị sập
         res.status(500).json({ summary: {}, details: [] });
     }
 });

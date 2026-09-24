@@ -162,12 +162,24 @@ router.get("/preview-bom/:productId", verifyToken, async (req, res) => {
     try {
         const qty = Number(req.query.qty) || 0;
         if (qty <= 0) return res.json([]);
+
+        // 💡 ĐÃ SỬA: Dùng truy vấn con (Subquery) chui thẳng vào bảng warehouse_products 
+        // để đếm tổng tồn kho thực tế của vật tư này thay vì lấy cột chung chung.
         const [rows] = await db.query(`
-            SELECT pb.material_id, p.name AS material_name, p.unit, p.quantity AS current_stock, (pb.quantity * ?) AS required_qty
-            FROM product_bom pb JOIN products p ON pb.material_id = p.id WHERE pb.product_id = ?
+            SELECT 
+                pb.material_id, 
+                p.name AS material_name, 
+                p.unit, 
+                IFNULL((SELECT SUM(quantity) FROM warehouse_products WHERE product_id = pb.material_id), 0) AS current_stock, 
+                (pb.quantity * ?) AS required_qty
+            FROM product_bom pb 
+            JOIN products p ON pb.material_id = p.id 
+            WHERE pb.product_id = ?
         `, [qty, req.params.productId]);
+
         res.json(rows);
     } catch (err) {
+        console.error("Lỗi lấy preview BOM:", err);
         res.status(500).json({ message: "Lỗi hệ thống" });
     }
 });
@@ -320,6 +332,114 @@ router.post("/monthly-costing", verifyToken, async (req, res) => {
         res.status(400).json({ message: err.message });
     } finally {
         connection.release();
+    }
+});
+
+// =======================================================================
+// API: BÁO CÁO THẤT THOÁT / HAO HỤT VẬT TƯ SẢN XUẤT 
+// (So sánh Thực tế dùng vs Định mức BOM chuẩn)
+// =======================================================================
+router.get('/wastage-report', verifyToken, async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+        let dateCondition = "";
+        let params = [];
+
+        if (startDate && endDate) {
+            dateCondition = "AND DATE(ph.created_at) BETWEEN ? AND ?";
+            params.push(startDate, endDate);
+        }
+
+        // THUẬT TOÁN:
+        // 1. pd.quantity_used: Thực tế dùng
+        // 2. (b.quantity * ph.quantity): Định mức chuẩn
+        // 3. Hao hụt = Thực tế - Chuẩn
+        const query = `
+            SELECT 
+                m.name AS material_name,
+                SUM(b.quantity * ph.quantity) AS standard_qty,
+                SUM(pd.quantity_used) AS used_qty,
+                (SUM(pd.quantity_used) - SUM(b.quantity * ph.quantity)) AS wastage_qty,
+                pd.unit_cost,
+                (SUM(pd.quantity_used) - SUM(b.quantity * ph.quantity)) * pd.unit_cost AS wastage_cost
+            FROM production_orders ph
+            JOIN production_order_details pd ON ph.id = pd.production_order_id
+            JOIN products m ON pd.material_id = m.id
+            JOIN product_bom b ON b.product_id = ph.product_id AND b.material_id = pd.material_id
+            WHERE 1=1 ${dateCondition}
+            GROUP BY pd.material_id, m.name, pd.unit_cost
+            HAVING wastage_qty > 0
+            ORDER BY wastage_cost DESC
+        `;
+
+        const [results] = await db.query(query, params);
+        res.json(results);
+
+    } catch (error) {
+        console.error("Lỗi API thống kê hao hụt:", error);
+        res.status(500).json({ message: "Lỗi hệ thống khi quét dữ liệu hao hụt." });
+    }
+});
+
+// =======================================================================
+// API: TÍNH TOÁN DỰ TRÙ VẬT TƯ (MRP) DỰA TRÊN KẾ HOẠCH SẢN XUẤT
+// =======================================================================
+router.post("/calculate-mrp", verifyToken, async (req, res) => {
+    try {
+        const { plan } = req.body; // Giao diện sẽ gửi lên mảng: [{ product_id: 1, quantity: 1000 }, ...]
+
+        if (!plan || plan.length === 0) return res.json([]);
+
+        // Lọc ra những thành phẩm có số lượng > 0 để tính toán
+        const validPlan = plan.filter(p => Number(p.quantity) > 0);
+        if (validPlan.length === 0) return res.json([]);
+
+        let aggregatedMaterials = {}; // Biến chứa tổng vật tư cần dùng
+
+        // 1. Quét từng thành phẩm để móc BOM (Công thức) ra nhân lên
+        for (let item of validPlan) {
+            const [boms] = await db.query(`SELECT material_id, quantity FROM product_bom WHERE product_id = ?`, [item.product_id]);
+            for (let bom of boms) {
+                if (!aggregatedMaterials[bom.material_id]) aggregatedMaterials[bom.material_id] = 0;
+                // Cộng dồn: Tổng cần = (Định mức 1 sản phẩm) x (Tổng số lượng định làm)
+                aggregatedMaterials[bom.material_id] += (Number(bom.quantity) * Number(item.quantity));
+            }
+        }
+
+        const materialIds = Object.keys(aggregatedMaterials);
+        if (materialIds.length === 0) return res.json([]);
+
+        // 2. Chui vào kho chốt xem số lượng đang có là bao nhiêu
+        const [stockInfo] = await db.query(`
+            SELECT 
+                p.id, p.name, p.unit, 
+                IFNULL((SELECT SUM(quantity) FROM warehouse_products WHERE product_id = p.id), 0) AS current_stock
+            FROM products p
+            WHERE p.id IN (?)
+        `, [materialIds]);
+
+        // 3. Làm toán trừ: [Cần Mua] = [Tổng Cần] - [Tồn Kho]
+        const result = stockInfo.map(mat => {
+            const reqQty = aggregatedMaterials[mat.id] || 0;
+            const stock = Number(mat.current_stock);
+            const toBuy = reqQty > stock ? (reqQty - stock) : 0;
+
+            return {
+                material_id: mat.id,
+                material_name: mat.name,
+                unit: mat.unit,
+                required_qty: reqQty,
+                current_stock: stock,
+                to_buy_qty: toBuy
+            };
+        });
+
+        // Ưu tiên xếp những vật tư đang THIẾU (cần mua) lên trên cùng
+        res.json(result.sort((a, b) => b.to_buy_qty - a.to_buy_qty));
+
+    } catch (err) {
+        console.error("Lỗi tính MRP:", err);
+        res.status(500).json({ message: "Lỗi hệ thống khi tính toán dự trù!" });
     }
 });
 
