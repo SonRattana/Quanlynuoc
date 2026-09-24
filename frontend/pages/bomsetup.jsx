@@ -45,7 +45,13 @@ function BomSetup() {
                     api.get(`api/bom/materials-for/${selectedProductId}`, { headers: { Authorization: `Bearer ${token}` } })
                 ]);
 
-                setFormula(formulaRes.data || []);
+                // 💡 ĐÃ FIX FE: Quét qua danh sách và ép quantity thành Number để gọt sạch đuôi ,000
+                const cleanFormula = (formulaRes.data || []).map(item => ({
+                    ...item,
+                    quantity: Number(item.quantity)
+                }));
+
+                setFormula(cleanFormula);
                 setAllowedMaterials(materialsRes.data || []);
             } catch (error) {
                 setToast({ message: "Lỗi tải dữ liệu chi tiết sản phẩm", type: "danger" });
@@ -160,12 +166,14 @@ function BomSetup() {
                                             ) : (
                                                 formula.map((item, index) => (
                                                     <tr key={index}>
+
                                                         {/* 💡 1. Gắn nhãn Nguyên vật liệu */}
                                                         <td data-label="Nguyên vật liệu">
                                                             <select
                                                                 className="form-select fw-bold text-primary border-primary"
                                                                 value={item.material_id}
-                                                                onChange={(e) => handleRowChange(index, "material_id", Number(e.target.value))}
+                                                                // 👇 ĐÃ FIX FE: Giữ lại chuỗi rỗng nếu chọn dòng trắng, tránh biến thành 0
+                                                                onChange={(e) => handleRowChange(index, "material_id", e.target.value ? Number(e.target.value) : "")}
                                                             >
                                                                 <option value="">-- Chọn vật tư (Đã lọc theo kích cỡ) --</option>
                                                                 {allowedMaterials.map(m => (
@@ -178,15 +186,18 @@ function BomSetup() {
 
                                                         {/* 💡 2. Gắn nhãn Số lượng */}
                                                         <td data-label="Số lượng tiêu hao">
-                                                            {/* Bỏ justify-content-center để trên đt nó tự động dạt sang phải cho đẹp */}
                                                             <div className="input-group d-flex justify-content-end justify-content-md-center">
                                                                 <input
                                                                     type="number"
                                                                     className="form-control text-center fw-bold text-danger"
                                                                     style={{ maxWidth: "150px" }}
-                                                                    min="0.1" step="0.1"
-                                                                    value={Number(item.quantity)}
-                                                                    onChange={(e) => handleRowChange(index, "quantity", Number(e.target.value))}
+                                                                    min="0.0001" step="any"
+
+                                                                    // 👇 ĐÃ FIX FE: Bỏ Number() để cho phép gõ dấu chấm thập phân siêu nhỏ trơn tru
+                                                                    value={item.quantity}
+
+                                                                    onFocus={(e) => e.target.select()}
+                                                                    onChange={(e) => handleRowChange(index, "quantity", e.target.value)}
                                                                 />
                                                             </div>
                                                         </td>

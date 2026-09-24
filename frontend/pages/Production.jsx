@@ -4,6 +4,8 @@ import Toast from "../components/Toast";
 import api from "../src/utils/axios";
 
 export default function Production() {
+    const token = localStorage.getItem("token");
+
     const [toast, setToast] = useState(null);
     const [finishedGoods, setFinishedGoods] = useState([]);
     const [selectedProduct, setSelectedProduct] = useState("");
@@ -11,76 +13,67 @@ export default function Production() {
     const [quantity, setQuantity] = useState("");
     const [isProducing, setIsProducing] = useState(false);
     const [bomPreview, setBomPreview] = useState([]);
-    const [shift, setShift] = useState("Ca 1");
     const [note, setNote] = useState("");
     const [pendingOrders, setPendingOrders] = useState([]);
     const [selectedOrder, setSelectedOrder] = useState("");
 
-    // Hàm gọi API lấy đơn hàng chưa xong
+    // 💡 STATE MỚI: Ghi nhớ số lượng THỰC SỰ CÒN THIẾU của đơn hàng
+    const [missingQty, setMissingQty] = useState(0);
+
     const fetchPendingOrders = async () => {
         try {
             const res = await api.get("api/sales-orders", { headers: { Authorization: `Bearer ${token}` } });
-
-            // 💡 CHỈ LẤY ĐƠN ĐANG CHỜ XƯỞNG LÀM. Đã giao, đã hủy, hay mới tạo chưa duyệt thì ẩn sạch!
             const activeOrders = res.data.filter(o => o.status === 'cho_san_xuat' || o.status === 'dang_san_xuat');
-
             setPendingOrders(activeOrders);
         } catch (err) { console.error(err); }
     };
-    // 💡 ĐỘNG CƠ TỰ ĐỘNG FILL SẢN PHẨM & SỐ LƯỢNG KHI CHỌN ĐƠN HÀNG
-    useEffect(() => {
-        if (!selectedOrder) return;
 
+    const fetchGoods = async () => {
+        try {
+            const res = await api.get("api/production/finished-goods", { headers: { Authorization: `Bearer ${token}` } });
+            setFinishedGoods(res.data);
+        } catch (err) { console.error(err); }
+    };
+
+    useEffect(() => {
+        fetchGoods();
+        fetchPendingOrders();
+    }, []);
+
+    useEffect(() => {
+        if (!selectedOrder) {
+            setMissingQty(0);
+            return;
+        }
         const autoFillOrderData = async () => {
             try {
-                const res = await api.get(`api/sales-orders/${selectedOrder}`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
+                const res = await api.get(`api/sales-orders/${selectedOrder}`, { headers: { Authorization: `Bearer ${token}` } });
                 const details = res.data.details || [];
 
-                // Nếu đơn hàng chỉ có 1 mặt hàng -> Tự động điền luôn
                 if (details.length === 1) {
                     const item = details[0];
-                    setSelectedProduct(String(item.product_id)); // Fill Tên SP
-
-                    // 💡 CÔNG THỨC THÔNG MINH MỚI (Đồng bộ với bảng Tiến độ):
-                    // Khấu trừ luôn số hàng đã lấy từ kho đi giao
+                    setSelectedProduct(String(item.product_id));
                     const effectiveReady = Math.max(item.produced_quantity || 0, item.delivered_quantity || 0);
                     const remainingQty = item.ordered_quantity - effectiveReady;
+
+                    // 💡 Lưu lại số lượng còn thiếu để so sánh
+                    setMissingQty(Math.max(0, remainingQty));
 
                     if (remainingQty > 0) {
                         setQuantity(String(remainingQty));
                     } else {
                         setQuantity("0");
-                        setToast({ message: "Đơn này đã đủ hàng rồi, xưởng không cần làm thêm!", type: "info" });
+                        setToast({ message: "Đơn này đã đủ hàng! Chỉ sản xuất thêm nếu cần BÙ HAO HỤT.", type: "info" });
                     }
-                }
-                // Nếu đơn có nhiều mặt hàng, reset ô SP để người dùng tự chọn món muốn làm
-                else if (details.length > 1) {
+                } else if (details.length > 1) {
                     setSelectedProduct("");
                     setQuantity("");
+                    setMissingQty(0);
                 }
-            } catch (err) {
-                console.error("Lỗi lấy chi tiết đơn:", err);
-            }
+            } catch (err) { console.error("Lỗi lấy chi tiết đơn:", err); }
         };
-
         autoFillOrderData();
-    }, [selectedOrder]); // Mỗi khi chọn đơn khác, hàm này sẽ chạy lại
-    useEffect(() => {
-        fetchGoods();
-        fetchPendingOrders(); // Gọi hàm khi load trang
-    }, []);
-    const [operatingCosts, setOperatingCosts] = useState({
-        dien: "",
-        nuoc: "",
-        luong: "",
-        baoTri: "",
-        khac: "",
-        ghiChuKhac: "" // 💡 Thêm biến lưu ghi chú cho chi phí khác
-    });
-
-    const token = localStorage.getItem("token");
+    }, [selectedOrder]);
 
     useEffect(() => {
         const fetchPreview = async () => {
@@ -89,82 +82,51 @@ export default function Production() {
                 return;
             }
             try {
-                const res = await api.get(`api/production/preview-bom/${selectedProduct}?qty=${quantity}`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-                setBomPreview(res.data);
+                const res = await api.get(`api/production/preview-bom/${selectedProduct}?qty=${quantity}`, { headers: { Authorization: `Bearer ${token}` } });
+
+                // 💡 FIX LỖI ,000: Ép qua Number để gọt sạch phần thập phân dư thừa của Database
+                const cleanData = res.data.map(item => ({
+                    ...item,
+                    required_qty: Number(item.required_qty)
+                }));
+                setBomPreview(cleanData);
+
             } catch (err) { console.error("Lỗi dự báo", err); }
         };
-
         const timeoutId = setTimeout(() => fetchPreview(), 500);
         return () => clearTimeout(timeoutId);
     }, [selectedProduct, quantity]);
 
-    const fetchGoods = async () => {
-        try {
-            const res = await api.get("api/production/finished-goods", {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            setFinishedGoods(res.data);
-        } catch (err) { console.error(err); }
-    };
-
-    useEffect(() => { fetchGoods(); }, []);
-
     const formatMoney = (val) => new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(Math.round(val || 0));
-
-    const formatInputNumber = (num) => {
-        if (!num) return "";
-        return String(num).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-    };
 
     const selectedProdData = finishedGoods.find(p => String(p.id) === String(selectedProduct));
     const unitDisplay = selectedProdData ? selectedProdData.unit : "Bình / Lốc / Lít";
 
     const handleMaterialChange = (idx, val) => {
         const newData = [...bomPreview];
-        newData[idx].required_qty = Number(val);
+        // 💡 FIX LỖI GÕ SỐ LẺ: Chỉ lưu chuỗi val, để React tự hiểu, cho phép gõ 0.5 mượt mà
+        newData[idx].required_qty = val;
         setBomPreview(newData);
     };
 
-    const handleCostChange = (field, val) => {
-        const numericString = String(val).replace(/[^0-9]/g, "");
-        setOperatingCosts(prev => ({ ...prev, [field]: numericString }));
-    };
-
-    const getCostNum = (val) => Number(val) || 0;
-
-    const totalExtraCost = getCostNum(operatingCosts.dien) +
-        getCostNum(operatingCosts.nuoc) +
-        getCostNum(operatingCosts.luong) +
-        getCostNum(operatingCosts.baoTri) +
-        getCostNum(operatingCosts.khac);
-
     const handleProduce = async () => {
         if (!selectedProduct) return setToast({ message: "Vui lòng chọn sản phẩm!", type: "warning" });
-        // if (!warehouseId) return setToast({ message: "Vui lòng chọn Kho chứa!", type: "warning" });
         if (Number(quantity) <= 0) return setToast({ message: "Số lượng phải lớn hơn 0!", type: "warning" });
+
+        // 💡 LƯỚI BẢO VỆ CHỐNG SẢN XUẤT LỐ / ÉP GHI CHÚ
+        if (selectedOrder && Number(quantity) > missingQty) {
+            const excess = Number(quantity) - missingQty;
+            const isConfirmed = window.confirm(`⚠️ CẢNH BÁO LÀM BÙ:\n\nĐơn hàng này chỉ còn thiếu ${missingQty} ${unitDisplay}.\nBạn đang lệnh sản xuất ${quantity} ${unitDisplay} (Vượt mức ${excess}).\n\nBạn có chắc chắn đây là làm BÙ HAO HỤT / BỂ VỠ không?`);
+
+            if (!isConfirmed) return; // Nếu bấm Hủy thì dừng luôn
+
+            if (note.trim() === "") {
+                return setToast({ message: `Đang làm dư ${excess} ${unitDisplay}. Vui lòng Ghi chú rõ lý do hao hụt/bể vỡ (ở Mục 4) để kế toán theo dõi!`, type: "danger" });
+            }
+        }
 
         setIsProducing(true);
         try {
-            // let costDetails = [];
-            // if (getCostNum(operatingCosts.dien) > 0) costDetails.push(`Điện: ${formatMoney(getCostNum(operatingCosts.dien))}`);
-            // if (getCostNum(operatingCosts.nuoc) > 0) costDetails.push(`Nước: ${formatMoney(getCostNum(operatingCosts.nuoc))}`);
-            // if (getCostNum(operatingCosts.luong) > 0) costDetails.push(`Lương: ${formatMoney(getCostNum(operatingCosts.luong))}`);
-            // if (getCostNum(operatingCosts.baoTri) > 0) costDetails.push(`Bảo trì: ${formatMoney(getCostNum(operatingCosts.baoTri))}`);
-
-            // // 💡 Gắn thêm phần ghi chú tự nhập vào chi phí Khác
-            // if (getCostNum(operatingCosts.khac) > 0) {
-            //     const ghiChu = operatingCosts.ghiChuKhac ? ` (${operatingCosts.ghiChuKhac})` : "";
-            //     costDetails.push(`Khác${ghiChu}: ${formatMoney(getCostNum(operatingCosts.khac))}`);
-            // }
-
-            // let finalNote = note;
-            // if (totalExtraCost > 0) {
-            //     const costText = `[Phí Vận Hành: ${formatMoney(totalExtraCost)} (${costDetails.join(" + ")})]`;
-            //     finalNote = note ? `${note} | ${costText}` : costText;
-            // }
-
             const res = await api.post("api/production", {
                 product_id: selectedProduct,
                 quantity: Number(quantity),
@@ -173,11 +135,7 @@ export default function Production() {
                 ref_sales_order_id: selectedOrder || null
             }, { headers: { Authorization: `Bearer ${token}` } });
 
-            setToast({
-                message: `Thành công! Đã nhập ${res.data.produced_qty} ${unitDisplay}.`,
-                type: "success"
-            });
-
+            setToast({ message: `Thành công! Đã nhập ${res.data.produced_qty} ${unitDisplay}.`, type: "success" });
             setQuantity("");
             setSelectedProduct("");
             setNote("");
@@ -192,227 +150,158 @@ export default function Production() {
     return (
         <Layout>
             {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-            <div className="pt-4 px-4 w-100 d-flex justify-content-center pb-5">
-                <div className="card shadow-lg border-0 mt-5" style={{ maxWidth: '800px', width: '100%', borderRadius: '15px' }}>
-                    <div className="card-header bg-primary text-white text-center py-3" style={{ borderRadius: '15px 15px 0 0' }}>
-                        <h4 className="mb-0 fw-bold"><i className="bi bi-gear-wide-connected me-2"></i> LỆNH SẢN XUẤT</h4>
+
+            <div className="container-fluid py-4 px-2 px-md-4 d-flex justify-content-center">
+                <div className="card shadow-sm border-0 w-100 rounded-4 overflow-hidden" style={{ maxWidth: '800px' }}>
+
+                    <div className="card-header bg-primary text-white text-center py-3 border-0">
+                        <h4 className="mb-0 fw-bold fs-4"><i className="bi bi-gear-wide-connected me-2"></i> LỆNH SẢN XUẤT MỚI</h4>
                     </div>
 
-                    <div className="card-body p-4 bg-light">
-                        {/* 💡 BƯỚC 1 MỚI: CHỌN ĐƠN HÀNG TRƯỚC */}
-                        <div className="mb-4">
-                            <label className="fw-bold text-info mb-2">1. Sản xuất theo Đơn Đặt Hàng (Tùy chọn):</label>
-                            <select
-                                className="form-select form-select-lg border-info shadow-sm"
-                                value={selectedOrder}
-                                onChange={(e) => setSelectedOrder(e.target.value)}
-                            >
-                                <option value="">-- Không có (Sản xuất cất kho) --</option>
+                    <div className="card-body p-3 p-md-4 bg-light">
+
+                        <div className="bg-white p-3 p-md-4 rounded-4 shadow-sm border mb-4">
+                            <h6 className="fw-bold text-info mb-3 text-uppercase small"><i className="bi bi-file-earmark-text me-2"></i>1. Liên kết Đơn hàng (Tùy chọn)</h6>
+                            <select className="form-select form-select-lg border-info fw-bold text-dark shadow-sm bg-light" value={selectedOrder} onChange={(e) => { setSelectedOrder(e.target.value); if (!e.target.value) setMissingQty(0); }}>
+                                <option value="">-- Không có (Sản xuất dự trữ vô kho) --</option>
                                 {pendingOrders.map(o => (
-                                    <option key={o.id} value={o.id}>
-                                        Mã: {o.order_code} - Khách: {o.customer_name}
-                                    </option>
+                                    <option key={o.id} value={o.id}>Đơn #{o.order_code} - Khách: {o.customer_name}</option>
                                 ))}
                             </select>
-                            <small className="text-muted fst-italic">
-                                *Chọn đơn hàng để hệ thống tự động điền sản phẩm và tính số lượng còn thiếu.
-                            </small>
+                            <small className="text-muted fst-italic d-block mt-2"><i className="bi bi-info-circle me-1"></i>Hệ thống tự động điền loại nước và số lượng còn thiếu dựa trên đơn hàng.</small>
                         </div>
 
-                        {/* 💡 BƯỚC 2: CHỌN SẢN PHẨM */}
-                        <div className="mb-4">
-                            <label className="fw-bold text-secondary mb-2">2. Chọn loại nước cần bơm (Sản phẩm):</label>
-                            <select
-                                className="form-select form-select-lg border-primary shadow-sm"
-                                value={selectedProduct}
-                                onChange={(e) => setQuantity("") || setSelectedProduct(e.target.value)}
-                            >
-                                <option value="">-- Chọn sản phẩm --</option>
-                                {finishedGoods.map(p => (
-                                    <option key={p.id} value={p.id}>
-                                        {p.name} - Tồn kho: {p.quantity} {p.unit} (Giá vốn HT: {formatMoney(p.cost_price)})
-                                    </option>
-                                ))}
-                            </select>
+                        <div className="bg-white p-3 p-md-4 rounded-4 shadow-sm border mb-4">
+                            <h6 className="fw-bold text-secondary mb-3 text-uppercase small"><i className="bi bi-box-seam me-2"></i>2. Thông tin mặt hàng</h6>
+
+                            <div className="mb-3">
+                                <label className="form-label small fw-bold text-muted">Loại nước cần sản xuất:</label>
+                                <select className="form-select form-select-lg border-primary fw-bold text-dark shadow-sm" value={selectedProduct} onChange={(e) => { setQuantity(""); setSelectedProduct(e.target.value); }}>
+                                    <option value="">-- Bấm chọn sản phẩm --</option>
+                                    {finishedGoods.map(p => (
+                                        <option key={p.id} value={p.id}>{p.name} (Tồn kho: {Number(p.quantity)} {p.unit})</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {selectedProduct && (
+                                <div className="row g-3">
+                                    <div className="col-md-6">
+                                        <label className="form-label small fw-bold text-muted">Số lượng sản xuất:</label>
+                                        <div className="input-group input-group-lg shadow-sm">
+                                            <input type="number" className={`form-control fw-bold text-center ${selectedOrder && Number(quantity) > missingQty ? 'text-danger border-warning' : 'text-primary'}`} placeholder="Nhập SL..." min="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} onKeyDown={(e) => { if (["-", "+", "e", "E", ".", ","].includes(e.key)) e.preventDefault(); }} />
+                                            <span className="input-group-text bg-light fw-bold text-muted text-uppercase">{unitDisplay}</span>
+                                        </div>
+                                        {/* 💡 HIỂN THỊ CẢNH BÁO NẾU GÕ LỐ SỐ LƯỢNG */}
+                                        {selectedOrder && Number(quantity) > missingQty && (
+                                            <div className="alert alert-warning mt-2 mb-0 py-2 px-3 small fw-bold shadow-sm border-warning">
+                                                <i className="bi bi-exclamation-triangle-fill text-danger me-2"></i>
+                                                Đơn chỉ thiếu <span className="text-danger">{missingQty}</span>. Đang làm dư <span className="text-danger">{Number(quantity) - missingQty}</span>. Hãy ghi rõ lý do hao hụt ở Mục 4!
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="col-md-6">
+                                        <label className="form-label small fw-bold text-muted">Kho cất giữ:</label>
+                                        <select className="form-select form-select-lg border-success fw-bold text-success shadow-sm bg-light" value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} disabled>
+                                            <option value="2">🏭 Kho Tổng Sản Phẩm</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
-                        {selectedProduct && (
-                            <>
-                                <div className="mb-4">
-                                    <label className="fw-bold text-secondary mb-2">3. Chọn kho cất giữ sau khi bơm:</label>
-                                    <select
-                                        className="form-select form-select-lg border-success shadow-sm fw-bold text-success"
-                                        value={warehouseId}
-                                        onChange={(e) => setWarehouseId(e.target.value)}
-                                    >
-                                        <option value="2">🏭 Kho Tổng Sản Phẩm</option>
-                                    </select>
+                        {selectedProduct && bomPreview.length > 0 && (
+                            <div className="bg-white p-3 p-md-4 rounded-4 shadow-sm border border-danger mb-4">
+                                <h6 className="fw-bold text-danger mb-3 text-uppercase small"><i className="bi bi-eye-fill me-2"></i>3. Dự kiến vật tư bị trừ kho</h6>
+
+                                <div className="d-none d-md-block table-responsive">
+                                    <table className="table table-bordered mb-0 align-middle text-center">
+                                        <thead className="table-light text-muted small">
+                                            <tr>
+                                                <th className="text-start">Tên vật tư (Nhãn, màng co...)</th>
+                                                <th style={{ width: '150px' }}>Thực tế dùng</th>
+                                                <th>Tồn kho hiện tại</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {bomPreview.map((item, idx) => (
+                                                <tr key={idx} className={item.current_stock < item.required_qty ? "table-danger" : ""}>
+                                                    <td className="text-start fw-bold text-dark">{item.material_name}</td>
+                                                    <td>
+                                                        <div className="input-group input-group-sm shadow-sm">
+                                                            <input
+                                                                type="number"
+                                                                className="form-control text-center fw-bold text-primary bg-white"
+                                                                // 💡 ĐÃ FIX FE: Bỏ Number() để cho phép gõ số thập phân (0.005) trơn tru
+                                                                value={item.required_qty}
+                                                                step="any"
+                                                                min="0"
+                                                                onChange={(e) => handleMaterialChange(idx, e.target.value)}
+                                                                style={{ color: '#0d6efd' }}
+                                                            />
+                                                        </div>
+                                                    </td>
+                                                    <td className="fw-bold text-secondary">{Number(item.current_stock)} {item.unit}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
                                 </div>
 
-                                <div className="mb-4">
-                                    <label className="fw-bold text-secondary mb-2">4. Số lượng sản xuất đợt này:</label>
-                                    <div className="input-group input-group-lg shadow-sm">
-                                        <input
-                                            type="number"
-                                            className="form-control fw-bold text-primary text-center"
-                                            placeholder="Nhập số lượng..."
-                                            min="1"
-                                            value={quantity}
-                                            onChange={(e) => setQuantity(e.target.value)}
-                                            onKeyDown={(e) => { if (["-", "+", "e", "E", ".", ","].includes(e.key)) e.preventDefault(); }}
-                                        />
-                                        <span className="input-group-text bg-white fw-bold text-muted text-uppercase">{unitDisplay}</span>
-                                    </div>
+                                <div className="d-block d-md-none">
+                                    {bomPreview.map((item, idx) => (
+                                        <div key={idx} className={`p-3 rounded-3 border mb-2 ${item.current_stock < item.required_qty ? "bg-danger bg-opacity-10 border-danger" : "bg-light"}`}>
+                                            <div className="fw-bold text-dark mb-2">{item.material_name}</div>
+                                            <div className="d-flex justify-content-between align-items-center">
+                                                <div className="input-group input-group-sm shadow-sm w-50">
+                                                    <input
+                                                        type="number"
+                                                        className="form-control text-center fw-bold text-primary bg-white"
+                                                        // 💡 ĐÃ FIX FE: Bỏ Number() cho giao diện mobile
+                                                        value={item.required_qty}
+                                                        step="any"
+                                                        min="0"
+                                                        onChange={(e) => handleMaterialChange(idx, e.target.value)}
+                                                        style={{ color: '#0d6efd' }}
+                                                    />
+                                                    <span className="input-group-text bg-white">{item.unit}</span>
+                                                </div>
+                                                <div className="small fw-bold text-muted">Tồn: {item.current_stock} {item.unit}</div>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
-
-                                {bomPreview.length > 0 && (
-                                    <div className="mt-3 p-3 bg-white border border-danger rounded shadow-sm mb-4">
-                                        <h6 className="fw-bold text-danger mb-2"><i className="bi bi-eye-fill me-2"></i>Dự kiến vật tư sẽ bị trừ:</h6>
-                                        <div className="table-responsive">
-                                            <table className="table table-sm table-bordered mb-0 align-middle text-center table-mobile-cards">
-                                                <thead className="table-light">
-                                                    <tr>
-                                                        <th className="text-start">Nguyên liệu</th>
-                                                        <th>Thực tế cần dùng</th>
-                                                        <th>Tồn kho</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {bomPreview.map((item, idx) => (
-                                                        <tr key={idx} className={item.current_stock < item.required_qty ? "table-danger" : ""}>
-                                                            <td data-label="Nguyên vật Liệu" className="text-start fw-bold">{item.material_name}</td>
-                                                            <td data-label="Cần Dùng" style={{ width: '150px' }}>
-                                                                <div className="input-group input-group-sm shadow-sm">
-                                                                    <input
-                                                                        type="number"
-                                                                        className="form-control text-center fw-bold text-primary"
-                                                                        value={Math.round(item.required_qty)}
-                                                                        onChange={(e) => handleMaterialChange(idx, e.target.value)}
-                                                                        min="1"
-                                                                    />
-                                                                    <span className="input-group-text bg-light">{item.unit}</span>
-                                                                </div>
-                                                            </td>
-                                                            <td data-label="Tồn Kho" className="fw-bold text-dark">{item.current_stock} {item.unit}</td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                )}
-
-                                <div className="mb-4">
-                                    <label className="fw-bold text-secondary mb-2">5.Ghi chú hao hụt:</label>
-                                    <div className="row g-2">
-                                        {/* <div className="col-md-3">
-                                            <select
-                                                className="form-select border-secondary shadow-sm fw-bold text-dark"
-                                                value={shift}
-                                                onChange={(e) => setShift(e.target.value)}
-                                            >
-                                                <option value="Ca 1">Ca 1 (Sáng)</option>
-                                                <option value="Ca 2">Ca 2 (Chiều)</option>
-                                                <option value="Ca 3">Ca 3 (Tối)</option>
-                                                <option value="Tăng ca">Tăng ca</option>
-                                            </select>
-                                        </div> */}
-                                        <div className="mb-4">
-                                            <input
-                                                type="text"
-                                                className="form-control border-secondary shadow-sm"
-                                                placeholder="Ghi chú hao hụt (nếu có). VD: Máy kẹt rách 5 màng co..."
-                                                value={note}
-                                                onChange={(e) => setNote(e.target.value)}
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* <div className="mb-4 p-3 border border-warning rounded bg-white shadow-sm">
-                                    <label className="fw-bold text-warning mb-3">
-                                        <i className="bi bi-cash-coin me-2"></i>5. Chi phí vận hành phát sinh trực tiếp (Tạm tính ban ngày):
-                                    </label>
-
-                                    <div className="row g-3">
-                                        <div className="col-md-3">
-                                            <label className="small fw-bold text-muted mb-1">⚡ Tiền điện</label>
-                                            <div className="input-group input-group-sm shadow-sm">
-                                                <input type="text" className="form-control border-warning fw-bold text-dark text-end" placeholder="0"
-                                                    value={formatInputNumber(operatingCosts.dien)} onChange={(e) => handleCostChange('dien', e.target.value)} />
-                                                <span className="input-group-text bg-light text-muted fw-bold">VNĐ</span>
-                                            </div>
-                                        </div>
-
-                                        <div className="col-md-3">
-                                            <label className="small fw-bold text-muted mb-1">💧 Tiền nước</label>
-                                            <div className="input-group input-group-sm shadow-sm">
-                                                <input type="text" className="form-control border-warning fw-bold text-dark text-end" placeholder="0"
-                                                    value={formatInputNumber(operatingCosts.nuoc)} onChange={(e) => handleCostChange('nuoc', e.target.value)} />
-                                                <span className="input-group-text bg-light text-muted fw-bold">VNĐ</span>
-                                            </div>
-                                        </div> */}
-
-                                {/* <div className="col-md-4">
-                                            <label className="small fw-bold text-muted mb-1">👷 Lương nhân công</label>
-                                            <div className="input-group input-group-sm shadow-sm">
-                                                <input type="text" className="form-control border-warning fw-bold text-dark text-end" placeholder="0" 
-                                                    value={formatInputNumber(operatingCosts.luong)} onChange={(e) => handleCostChange('luong', e.target.value)} />
-                                                <span className="input-group-text bg-light text-muted fw-bold">VNĐ</span>
-                                            </div>
-                                        </div> */}
-
-                                {/* <div className="col-md-6">
-                                            <label className="small fw-bold text-muted mb-1">🔧 Sửa chữa, bảo trì máy</label>
-                                            <div className="input-group input-group-sm shadow-sm">
-                                                <input type="text" className="form-control border-warning fw-bold text-dark text-end" placeholder="0" 
-                                                    value={formatInputNumber(operatingCosts.baoTri)} onChange={(e) => handleCostChange('baoTri', e.target.value)} />
-                                                <span className="input-group-text bg-light text-muted fw-bold">VNĐ</span>
-                                            </div>
-                                        </div> */}
-
-                                {/* Ô Nhập Phát Sinh Khác (Clean lại cho gọn trên 1 dòng) */}
-                                {/* <div className="col-md-12">
-                                            <label className="small fw-bold text-muted mb-1">💰 Phát sinh khác (Nếu có)</label>
-                                            <div className="input-group input-group-sm shadow-sm">
-                                                <input type="text" className="form-control border-warning fw-bold text-dark text-end" style={{ maxWidth: "180px" }} placeholder="0"
-                                                    value={formatInputNumber(operatingCosts.khac)} onChange={(e) => handleCostChange('khac', e.target.value)} />
-                                                <span className="input-group-text bg-light text-muted fw-bold border-end-0">VNĐ</span>
-                                                <input
-                                                    type="text"
-                                                    className="form-control border-warning text-dark fst-italic"
-                                                    placeholder="Tự nhập ghi chú (VD: Tiền mua cồn, bao tay...)"
-                                                    value={operatingCosts.ghiChuKhac}
-                                                    onChange={(e) => setOperatingCosts({ ...operatingCosts, ghiChuKhac: e.target.value })}
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <hr className="text-warning my-3" />
-                                    <div className="d-flex justify-content-between align-items-center">
-                                        <span className="fw-bold text-dark fs-6">Tổng chi phí cộng vào Giá Vốn tạm tính:</span>
-                                        <span className="fw-bold text-danger fs-5">{formatMoney(totalExtraCost)}</span>
-                                    </div> */}
-
-                                {/* 💡 DÒNG GHI CHÚ BẢO MẬT HIỂN THỊ CHO THỢ */}
-                                {/* <div className="mt-3 p-2 bg-light border-start border-4 border-info rounded shadow-sm">
-                                        <small className="text-muted d-block fst-italic" style={{ fontSize: "12px" }}>
-                                            <i className="bi bi-info-circle-fill text-info me-1"></i>
-                                            <strong>Lưu ý:</strong> Tiền lương nhân công và khấu hao máy móc đã được hệ thống ẩn đi để bảo mật. Kế toán sẽ tự động cộng thêm các khoản này vào giá vốn thực tế vào cuối ngày.
-                                        </small>
-                                    </div> */}
-                                {/* </div> */}
-                            </>
+                            </div>
                         )}
 
-                        <button
-                            className="btn btn-success btn-lg w-100 fw-bold shadow"
-                            disabled={!selectedProduct || !quantity || isProducing}
-                            onClick={handleProduce}
-                        >
-                            {isProducing ? "ĐANG XỬ LÝ..." : "BẮT ĐẦU SẢN XUẤT"}
-                        </button>
+                        {selectedProduct && (
+                            <div className="bg-white p-3 p-md-4 rounded-4 shadow-sm border mb-4">
+                                <h6 className="fw-bold text-secondary mb-3 text-uppercase small"><i className="bi bi-pencil-square me-2"></i>4. Ghi chú (Hao hụt / Bể vỡ)</h6>
+                                <textarea className="form-control border-secondary shadow-sm bg-light" rows="2" placeholder="VD: Sản xuất bù 2 bình rớt bể, rách 5 màng co..." value={note} onChange={(e) => setNote(e.target.value)}></textarea>
+                            </div>
+                        )}
+
+                        {/* 💡 TẠO BIẾN KIỂM TRA XEM CÓ VẬT TƯ NÀO BỊ THIẾU KHÔNG */}
+                        {(() => {
+                            const isShortOfMaterial = bomPreview.some(item => Number(item.current_stock) < Number(item.required_qty));
+
+                            return (
+                                <button
+                                    className={`btn btn-lg w-100 fw-bold shadow py-3 rounded-4 fs-5 ${isShortOfMaterial ? 'btn-secondary' : 'btn-success'}`}
+                                    disabled={!selectedProduct || !quantity || isProducing || isShortOfMaterial}
+                                    onClick={handleProduce}
+                                >
+                                    {isProducing ? (
+                                        <><span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>ĐANG LƯU...</>
+                                    ) : isShortOfMaterial ? (
+                                        <><i className="bi bi-x-circle-fill me-2"></i>KHO KHÔNG ĐỦ VẬT TƯ</>
+                                    ) : (
+                                        <><i className="bi bi-play-circle-fill me-2"></i>BẮT ĐẦU SẢN XUẤT</>
+                                    )}
+                                </button>
+                            );
+                        })()}
+
                     </div>
                 </div>
             </div>

@@ -33,7 +33,7 @@ function Invoices() {
 
     const formatDate = (dateString) => {
         const date = new Date(dateString);
-        date.setHours(date.getHours() + 7);
+        // date.setHours(date.getHours() + 7);
         return date.toLocaleString("vi-VN");
     };
 
@@ -144,7 +144,7 @@ function Invoices() {
                                                 <td><span className="badge bg-secondary">{px.order_code}</span></td>
                                                 <td className="text-start fw-bold text-dark">{px.customer_name}</td>
                                                 <td className="text-start text-primary fw-bold">{px.product_name}</td>
-                                                <td><span className="badge bg-success fs-6">{px.quantity}</span></td>
+                                                <td><span className="badge bg-success fs-6">{Number(px.quantity)}</span></td>
                                                 <td className="fw-bold text-danger">{formatMoney(px.quantity * px.sell_price)}</td>
                                                 <td>
                                                     <button
@@ -247,7 +247,7 @@ function Invoices() {
                                     })
                                 ) : (
                                     <tr>
-                                        <td data-label colSpan="10" className="text-center text-muted py-4">Chưa có hóa đơn nào</td>
+                                        <td colSpan="10" className="text-center text-muted py-4">Chưa có hóa đơn nào</td>
                                     </tr>
                                 )}
                             </tbody>

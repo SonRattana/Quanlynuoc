@@ -1,9 +1,9 @@
 import { useNavigate, useLocation } from "react-router-dom";
-import React, { useState, useEffect, useRef } from "react"; // 💡 THÊM useRef Ở ĐÂY
+import React, { useState, useEffect, useRef } from "react";
 import logo from "../src/public/bvmt-removebg-preview.png";
-import axios from "axios";
 import api from "../src/utils/axios";
 import { io } from "socket.io-client";
+
 const BACKEND_URL = import.meta.env.VITE_BASE_URL || "http://localhost:3000";
 const socket = io(BACKEND_URL);
 
@@ -11,46 +11,52 @@ function Sidebar() {
     const navigate = useNavigate();
     const location = useLocation();
     const user = JSON.parse(localStorage.getItem("user")) || {};
+    const token = localStorage.getItem("token");
 
     const [isOpen, setIsOpen] = useState(false);
     const [unreadCount, setUnreadCount] = useState(0);
 
-    // 💡 1. TẠO BỘ NHỚ LƯU TỌA ĐỘ THANH CUỘN
     const sidebarRef = useRef(null);
 
-    // 💡 2. KHÔI PHỤC VỊ TRÍ CUỘN MỖI KHI LOAD LẠI HOẶC CHUYỂN TRANG
     useEffect(() => {
         const savedPos = sessionStorage.getItem("sidebarScrollY");
         if (sidebarRef.current && savedPos) {
-            // Khôi phục lại vị trí cũ
             sidebarRef.current.scrollTop = Number(savedPos);
         }
-    }, [location.pathname]); // Chạy lại mỗi khi sếp bấm sang link mới
+    }, [location.pathname]);
 
-    // 💡 3. HÀM GHI NHỚ TỌA ĐỘ KHI SẾP LĂN CHUỘT
     const handleScroll = (e) => {
         sessionStorage.setItem("sidebarScrollY", e.target.scrollTop);
     };
 
+    // 💡 HÀM LẤY SỐ LƯỢNG ĐƠN HÀNG CHỜ (GỌI ĐÚNG API VỪA TẠO)
+    const fetchPendingCount = async () => {
+        if (!token) return;
+        try {
+            const res = await api.get(`api/sales-orders/pending-count`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setUnreadCount(res.data.count);
+        } catch (error) {
+            console.error("Lỗi lấy số đơn chờ:", error);
+        }
+    };
+
+    // 💡 CHẠY NGẦM QUÉT DỮ LIỆU MỖI 15 GIÂY (Auto-refresh)
     useEffect(() => {
-        const fetchPendingCount = async () => {
-            try {
-                const res = await axios.get(`api/orders/count-pending`);
-                setUnreadCount(res.data.count);
-            } catch (error) {
-                console.error("Lỗi lấy số đơn chờ:", error);
-            }
-        };
-        fetchPendingCount();
-    }, []);
+        fetchPendingCount(); // Gọi lần đầu
+        const interval = setInterval(fetchPendingCount, 15000); // Quét mỗi 15s
+        return () => clearInterval(interval);
+    }, [token]);
 
     useEffect(() => {
         setIsOpen(false);
     }, [location.pathname]);
 
+    // 💡 NHẬN SÓNG SOCKET TỪ SALE ĐỂ TỰ ĐỘNG CỘNG SỐ LÊN NGAY LẬP TỨC KHÔNG CẦN CHỜ 15S
     useEffect(() => {
         socket.on("co_don_hang_moi", () => {
-            setUnreadCount(prev => prev + 1); 
+            setUnreadCount(prev => prev + 1);
             const audio = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3");
             audio.play().catch(e => console.log("Trình duyệt chặn âm thanh tự động"));
         });
@@ -64,9 +70,6 @@ function Sidebar() {
     };
 
     const goTo = (path) => {
-        if (path === '/orders') {
-            setUnreadCount(0);
-        }
         navigate(path);
     };
 
@@ -100,18 +103,25 @@ function Sidebar() {
                     border-left: 4px solid #0d6efd; 
                 }
 
+                /* 💡 HIỆU ỨNG NHẤP NHÁY NHỊP TIM CHO SỐ THÔNG BÁO */
+                @keyframes pulse-red {
+                    0% { box-shadow: 0 0 0 0 rgba(255, 77, 79, 0.7); }
+                    70% { box-shadow: 0 0 0 8px rgba(255, 77, 79, 0); }
+                    100% { box-shadow: 0 0 0 0 rgba(255, 77, 79, 0); }
+                }
+
                 .badge-notify {
                     background: #ff4d4f;
                     color: white;
-                    border-radius: 50%;
-                    padding: 2px 6px;
+                    border-radius: 50px;
+                    padding: 2px 8px;
                     font-size: 11px;
                     font-weight: bold;
                     position: absolute;
                     top: 50%;
                     right: 15px;
                     transform: translateY(-50%);
-                    box-shadow: 0 0 5px rgba(255, 77, 79, 0.5);
+                    animation: pulse-red 1.5s infinite; /* Gắn hiệu ứng */
                 }
 
                 .sidebar {
@@ -192,8 +202,8 @@ function Sidebar() {
                     .sidebar .menu { flex-direction: column !important; padding: 0 15px; }
 
                     .badge-notify {
-                        top: 10px; 
-                        right: 10px;
+                        top: 15px; 
+                        right: 15px;
                         transform: none;
                     }
 
@@ -226,11 +236,10 @@ function Sidebar() {
 
             <div className={`mobile-overlay ${isOpen ? "show" : ""}`} onClick={() => setIsOpen(false)}></div>
 
-            {/* 💡 4. GẮN MỎ NEO VÀ SỰ KIỆN CUỘN VÀO KHUNG SIDEBAR */}
-            <div 
+            <div
                 ref={sidebarRef}
                 onScroll={handleScroll}
-                className={`sidebar d-flex flex-column ${isOpen ? "open" : ""}`} 
+                className={`sidebar d-flex flex-column ${isOpen ? "open" : ""}`}
                 style={{ height: "100vh" }}
             >
                 <div className="logo mb-2 mt-1 px-3">
@@ -243,9 +252,11 @@ function Sidebar() {
                 <div className="user-box mb-3 mt-2 px-3 d-flex align-items-center">
                     <img src="https://i.pravatar.cc/100" alt="user" className="avatar me-2" style={{ width: '45px', height: '45px', borderRadius: '50%', border: '2px solid #0d6efd' }} />
                     <div>
-                        <h6 className="fw-bold mb-1" style={{ fontSize: '15px' }}>{user?.username || "User"}</h6>
+                        {/* <h6 className="fw-bold mb-1" style={{ fontSize: '15px' }}>{user?.username || "User"}</h6> */}
                         {user?.role === 'admin' ? (
                             <span className="badge bg-danger text-white">Quản lý</span>
+                        ) : user?.role === 'nhanvien' ? (
+                            <span className="badge bg-primary text-white">Sell</span>
                         ) : user?.role === 'ketoan' ? (
                             <span className="badge bg-success text-white">Kế toán</span>
                         ) : user?.role === 'sanxuat' ? (
@@ -266,7 +277,7 @@ function Sidebar() {
 
                         return (
                             <>
-                                {(isAdmin || isKeToan) && (
+                                {(isAdmin || isKeToan || isNhanVien) && (
                                     <>
                                         <div className="text-info small fw-bold px-3 mb-1 mt-2 ">💰 TÀI CHÍNH - BÁO CÁO</div>
                                         <a className={`menu-item ${isActive('/dashboard')}`} onClick={() => goTo('/dashboard')} style={{ cursor: 'pointer' }}>
@@ -285,7 +296,7 @@ function Sidebar() {
                                     </>
                                 )}
 
-                                {(isAdmin || isSanXuat || isKeToan) && (
+                                {(isAdmin || isSanXuat || isKeToan || isNhanVien) && (
                                     <>
                                         <div className="text-info small fw-bold px-3 mb-1 mt-2">🏭 SẢN XUẤT - KHO</div>
                                         <a className={`menu-item ${isActive('/products')}`} onClick={() => goTo('/products')} style={{ cursor: 'pointer' }}>
@@ -295,7 +306,8 @@ function Sidebar() {
                                             <i className="fa fa-shopping-cart me-2"></i> Nhập Nguyên Vật Liệu
                                         </a>
 
-                                        {(isAdmin || isSanXuat) && (
+                                        {/* 💡 ĐÃ FIX: Bật nút hiển thị cho cả Kế toán */}
+                                        {(isAdmin || isSanXuat || isKeToan) && (
                                             <>
                                                 <a className={`menu-item ${isActive('/bomsetup')}`} onClick={() => goTo('/bomsetup')} style={{ cursor: 'pointer' }}>
                                                     <i className="fa fa-cogs me-2"></i> Cấu Hình Công Thức Sản Xuất
@@ -305,10 +317,17 @@ function Sidebar() {
                                                 </a>
                                             </>
                                         )}
+                                        {(isAdmin || isSanXuat || isKeToan || isNhanVien) && (
+                                            <>
+                                                <a className={`menu-item ${isActive('/mrp')}`} onClick={() => goTo('/mrp')} style={{ cursor: 'pointer' }}>
+                                                    <i className="bi bi-calendar-check me-2"></i> Dự trù nguyên vật liệu
+                                                </a>
+                                                <a className={`menu-item ${isActive('/production-history')}`} onClick={() => goTo('/production-history')} style={{ cursor: 'pointer' }}>
+                                                    <i className="fa fa-history me-2"></i> Lịch sử Sản xuất
+                                                </a>
+                                            </>
+                                        )}
 
-                                        <a className={`menu-item ${isActive('/production-history')}`} onClick={() => goTo('/production-history')} style={{ cursor: 'pointer' }}>
-                                            <i className="fa fa-history me-2"></i> Lịch sử Sản xuất
-                                        </a>
                                         <a className={`menu-item ${isActive('/stock')}`} onClick={() => goTo('/stock')} style={{ cursor: 'pointer' }}>
                                             <i className="fa fa-warehouse me-2"></i> Nhập/Xuất Kho
                                         </a>
@@ -316,21 +335,27 @@ function Sidebar() {
                                     </>
                                 )}
 
-                                {(isAdmin || isNhanVien || isKeToan) && (
+                                {/* 💡 PHẦN 1: ĐƠN ĐẶT HÀNG (Ai cũng cần xem) */}
+                                {(isAdmin || isNhanVien || isKeToan || isSanXuat) && (
                                     <>
-                                        <div className="text-info small fw-bold px-3 mb-1 mt-2">🛒 BÁN HÀNG</div>
+                                        <div className="text-info small fw-bold px-3 mb-1 mt-2">🛒 BÁN HÀNG & ĐƠN</div>
                                         <a className={`menu-item ${isActive('/sales-orders')}`} onClick={() => goTo('/sales-orders')} style={{ cursor: 'pointer' }}>
                                             <i className="fa fa-clipboard-list me-2"></i> Đơn Đặt Hàng
+                                            {unreadCount > 0 && (
+                                                <span className="badge-notify">{unreadCount}</span>
+                                            )}
                                         </a>
+                                    </>
+                                )}
+
+                                {/* 💡 PHẦN 2: NGHIỆP VỤ SALE (Giấu đi đối với bộ phận Sản Xuất) */}
+                                {(isAdmin || isNhanVien || isKeToan) && (
+                                    <>
                                         {(isAdmin || isNhanVien) && (
-                                            <>
-                                                <a className={`menu-item ${isActive('/sales')}`} onClick={() => goTo('/sales')} style={{ cursor: 'pointer' }}>
-                                                    <i className="fa fa-file-alt me-2"></i> Bán hàng
-                                                </a>
-
-                                            </>
+                                            <a className={`menu-item ${isActive('/sales')}`} onClick={() => goTo('/sales')} style={{ cursor: 'pointer' }}>
+                                                <i className="fa fa-file-alt me-2"></i> Bán hàng
+                                            </a>
                                         )}
-
                                         <a className={`menu-item ${isActive('/invoices')}`} onClick={() => goTo('/invoices')} style={{ cursor: 'pointer' }}>
                                             <i className="fa fa-file-invoice me-2"></i> Lịch sử giao dịch
                                         </a>
@@ -368,15 +393,15 @@ function Sidebar() {
                         );
                     })()}
                 </div>
-                
+
                 <div
                     className="mt-auto p-3 text-center text-white"
                     style={{
                         backgroundColor: "#0d6efd",
                         position: "sticky",
                         bottom: "0",
-                        marginLeft: "-20px", 
-                        marginRight: "-20px", 
+                        marginLeft: "-20px",
+                        marginRight: "-20px",
                         marginBottom: "0",
                         fontSize: "12px",
                         zIndex: 999,

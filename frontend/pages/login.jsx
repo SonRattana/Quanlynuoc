@@ -36,6 +36,10 @@ export default function Login() {
         // Sếp sòng -> Vào thẳng buồng lái
         navigate("/dashboard");
       }
+      else if (userRole === "nhanvien") {
+        // Sell -> Đá thẳng ra quầy bán hàng
+        navigate("/dashboard");
+      }
       else if (userRole === "user") {
         // Nhân viên -> Đá thẳng ra quầy bán hàng
         navigate("/sales");

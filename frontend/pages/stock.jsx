@@ -360,7 +360,7 @@ function Stock() {
         <ul className="nav nav-pills mb-4 bg-white p-2 rounded-3 shadow-sm border" style={{ gap: '10px' }}>
           <li className="nav-item">
             <button className={`nav-link fw-bold px-4 ${activeTab === 'thanh_pham' ? 'active bg-success' : 'text-secondary'}`} onClick={() => setActiveTab("thanh_pham")}>
-              <i className="fa fa-box-open me-2"></i>📦 Tồn Kho Sản Phẩm
+              <i className="fa fa-box-open me-2"></i>📦 Tồn kho thành phẩm
             </button>
           </li>
           <li className="nav-item">
@@ -450,7 +450,11 @@ function Stock() {
                             <td data-label="Thuộc Kho"><span className="badge bg-light text-dark border">{item.warehouse_name}</span></td>
                             <td data-label="Số Lượng Tồn">
                               <span className={`fw-bold fs-5 ${item.quantity <= 10 ? 'text-danger' : 'text-primary'}`}>
-                                {item.quantity}
+                                {Number(item.quantity)}
+                              </span>
+                              {/* 💡 ĐÃ FIX: Thêm đơn vị tính vào ngay phía sau con số */}
+                              <span className="ms-1 text-muted small fw-bold">
+                                {prodInfo?.unit}
                               </span>
                             </td>
                             {activeTab === "thanh_pham" && (
@@ -459,8 +463,7 @@ function Stock() {
                             <td data-label="Tình Trạng">
                               {item.quantity <= 0
                                 ? <span className="badge bg-danger">Hết hàng</span>
-                                : item.quantity <= 24 && activeTab === 'nguyen_lieu'
-                                  ? <span className="badge bg-warning text-dark">Sắp hết vật tư!</span>
+                                : item.quantity <= 24 ? <span className="badge bg-warning text-dark">Sắp hết hàng!</span>
                                   : <span className="badge bg-success">Còn hàng</span>
                               }
                             </td>
@@ -573,19 +576,19 @@ function Stock() {
                               <td data-label="Tên Thành Phẩm" className="text-start fw-bold text-dark">{item.name} <span className="badge bg-light text-secondary ms-1">{item.unit}</span></td>
 
                               {/* TỒN ĐẦU */}
-                              <td data-label="Tồn Đầu (SL)" className="text-secondary fw-bold fs-6">{tonDauSl}</td>
+                              <td data-label="Tồn Đầu (SL)" className="text-secondary fw-bold fs-6">{Number(tonDauSl)}</td>
                               <td data-label="Tồn Đầu (TT)" className="text-secondary">{formatMoney(tonDauTt)}</td>
 
                               {/* NHẬP KHO */}
-                              <td data-label="Nhập Kho (SL)" className="text-primary fw-bold fs-6">{item.nhap_sl}</td>
+                              <td data-label="Nhập Kho (SL)" className="text-primary fw-bold fs-6">{Number(item.nhap_sl)}</td>
                               <td data-label="Nhập Kho (TT)" className="text-primary">{formatMoney(item.nhap_tt)}</td>
 
                               {/* XUẤT KHO */}
-                              <td data-label="Xuất Kho (SL)" className="text-warning text-dark fw-bold fs-6">{item.xuat_sl}</td>
+                              <td data-label="Xuất Kho (SL)" className="text-warning text-dark fw-bold fs-6">{Number(item.xuat_sl)}</td>
                               <td data-label="Xuất Kho (TT)" className="text-warning text-dark">{formatMoney(item.xuat_tt)}</td>
 
                               {/* TỒN CUỐI */}
-                              <td data-label="Tồn Cuối (SL)" className={`fw-bold fs-5 ${item.ton_sl <= 0 ? 'text-danger' : 'text-success'}`}>{item.ton_sl}</td>
+                              <td data-label="Tồn Cuối (SL)" className={`fw-bold fs-5 ${item.ton_sl <= 0 ? 'text-danger' : 'text-success'}`}>{Number(item.ton_sl)}</td>
                               <td data-label="Giá Trị Tồn (TT)" className="fw-bold text-danger fs-6">{formatMoney(item.ton_tt)}</td>
                             </tr>
                           )
@@ -638,19 +641,19 @@ function Stock() {
                               <td data-label="Tên NVL" className="text-start fw-bold text-dark">{item.name} <span className="badge bg-light text-secondary ms-1">{item.unit}</span></td>
 
                               {/* TỒN ĐẦU */}
-                              <td data-label="Tồn Đầu(SL)" className="text-secondary fw-bold fs-6">{tonDauSl}</td>
+                              <td data-label="Tồn Đầu(SL)" className="text-secondary fw-bold fs-6">{Number(tonDauSl)}</td>
                               <td data-label="Tồn Đầu(TT)" className="text-secondary">{formatMoney(tonDauTt)}</td>
 
                               {/* NHẬP KHO */}
-                              <td data-label="Nhập Kho(SL)" className="text-primary fw-bold fs-6">{item.nhap_sl}</td>
+                              <td data-label="Nhập Kho(SL)" className="text-primary fw-bold fs-6">{Number(item.nhap_sl)}</td>
                               <td data-label="Nhập Kho(TT)" className="text-primary">{formatMoney(item.nhap_tt)}</td>
 
                               {/* XUẤT KHO */}
-                              <td data-label="Xuất Kho(SL)" className="text-danger fw-bold fs-6">{item.xuat_sl}</td>
+                              <td data-label="Xuất Kho(SL)" className="text-danger fw-bold fs-6">{Number(item.xuat_sl)}</td>
                               <td data-label="Xuất Kho(TT)" className="text-danger">{formatMoney(item.xuat_tt)}</td>
 
                               {/* TỒN CUỐI */}
-                              <td data-label="Tồn Cuối(SL)" className={`fw-bold fs-5 ${item.ton_sl <= 0 ? 'text-danger' : 'text-dark'}`}>{item.ton_sl}</td>
+                              <td data-label="Tồn Cuối(SL)" className={`fw-bold fs-5 ${item.ton_sl <= 0 ? 'text-danger' : 'text-dark'}`}>{Number(item.ton_sl)}</td>
                               <td data-label="Tồn Cuối(TT)" className="fw-bold text-danger fs-6">{formatMoney(item.ton_tt)}</td>
                             </tr>
                           )
@@ -704,7 +707,7 @@ function Stock() {
                               : <span className="badge bg-danger"><i className="fa fa-arrow-up me-1"></i>Xuất ra</span>}
                           </td>
                           <td className={`fw-bold fs-5 ${h.type === 'import' ? 'text-success' : 'text-danger'}`}>
-                            {h.type === 'import' ? '+' : '-'}{h.quantity}
+                            {h.type === 'import' ? '+' : '-'}{Number(h.quantity)}
                           </td>
                           <td className="text-start fst-italic text-secondary">{h.reason || "-"}</td>
                         </tr>

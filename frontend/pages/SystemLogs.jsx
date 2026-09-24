@@ -10,7 +10,7 @@ function SystemLogs() {
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [toast, setToast] = useState(null);
-    
+
     // State để mở Modal xem chi tiết JSON
     const [selectedLog, setSelectedLog] = useState(null);
 
@@ -20,9 +20,9 @@ function SystemLogs() {
             setLogs(res.data.data || []);
             setTotalPages(res.data.totalPages || 1);
         } catch (error) {
-            setToast({ 
-                message: error.response?.data?.message || "Lỗi tải nhật ký hệ thống", 
-                type: "danger" 
+            setToast({
+                message: error.response?.data?.message || "Lỗi tải nhật ký hệ thống",
+                type: "danger"
             });
         }
     };
@@ -31,20 +31,23 @@ function SystemLogs() {
         fetchLogs();
     }, [page]);
 
-    // Hàm định dạng ngày giờ cho đẹp
+    // Hàm định dạng ngày giờ cho đẹp (Đã vá lỗi Safari)
     const formatDate = (dateString) => {
-        const d = new Date(dateString);
+        if (!dateString) return "N/A";
+        // Thay khoảng trắng thành chữ 'T' chuẩn quốc tế ISO 8601
+        const safeString = dateString.replace(" ", "T");
+        const d = new Date(safeString);
         return d.toLocaleString("vi-VN", { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
     };
 
     return (
         <Layout>
             {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-            
+
             <div className="container-fluid pt-4 px-4">
                 <div className="bg-white shadow-sm p-4 rounded">
                     <h4 className="fw-bold mb-4 text-danger"><i className="fa fa-user-secret me-2"></i>Nhật ký hệ thống (Audit Logs)</h4>
-                    
+
                     <div className="table-responsive">
                         <table className="table table-hover align-middle table-bordered table-mobile-cards">
                             <thead className="table-dark">
@@ -74,7 +77,7 @@ function SystemLogs() {
                                         <td data-label="Mô Tả">{log.description}</td>
                                         <td data-label="IP Address"> {log.ip_address}</td>
                                         <td data-label="Chi Tiết" className="text-center">
-                                            <button 
+                                            <button
                                                 className="btn btn-sm btn-outline-info"
                                                 onClick={() => setSelectedLog(log)}
                                             >
@@ -87,7 +90,7 @@ function SystemLogs() {
                                 )}
                             </tbody>
                         </table>
-                        
+
                         <Pagination page={page} totalPages={totalPages} setPage={setPage} />
                     </div>
                 </div>

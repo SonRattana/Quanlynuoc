@@ -48,7 +48,7 @@ export default function StockDetailModal({ transaction, onClose }) {
                                 <tr>
                                     <td className="text-muted">Số lượng:</td>
                                     <td className={`fw-bold fs-5 ${isExport ? 'text-danger' : 'text-success'}`}>
-                                        {isExport ? '-' : '+'}{transaction.quantity}
+                                        {isExport ? '-' : '+'}{Number(transaction.quantity)}
                                     </td>
                                 </tr>
                                 <tr>

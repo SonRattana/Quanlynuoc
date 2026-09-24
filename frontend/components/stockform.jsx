@@ -82,7 +82,24 @@ export default function StockForm({
 
         <div className={type === "export" ? "col-md-2" : type === "import" ? "col-md-3" : "col-md-2"}>
           <label className="form-label fw-bold">Ghi chú <span className="text-danger">*</span></label>
-          <input type="text" className="form-control" required value={form.reason} placeholder="Lý do xuất/nhập..." onChange={(e) => setForm({ ...form, reason: e.target.value })} />
+
+          {/* 💡 Thêm list="reason-suggestions" vào input */}
+          <input
+            type="text"
+            className="form-control"
+            required
+            list="reason-suggestions"
+            value={form.reason}
+            placeholder="Lý do xuất/nhập..."
+            onChange={(e) => setForm({ ...form, reason: e.target.value })}
+          />
+
+          {/* 💡 THÊM DANH SÁCH GỢI Ý ĐỂ KẾ TOÁN BẤM LÀ XONG */}
+          <datalist id="reason-suggestions">
+            <option value="Xuất hủy / Hao hụt / Bể vỡ" />
+            <option value="Xuất bán ve chai" />
+            <option value="Cân bằng kho (Kiểm kê)" />
+          </datalist>
         </div>
 
         <div className={type === "export" ? "col-md-1" : "col-md-2 d-flex align-items-end"}>

@@ -443,8 +443,8 @@ function Products() {
                                     ) : (
                                         <>
                                             <option value="cái">Cái</option>
-                                            {/* <option value="kg">Kg</option>
-                                            <option value="cuộn">Cuộn</option>
+                                            <option value="kg">Kg</option>
+                                            {/* <option value="cuộn">Cuộn</option>
                                             <option value="mét">Mét</option> */}
                                         </>
                                     )}
@@ -464,6 +464,9 @@ function Products() {
                                 <div className="col-md-2">
                                     <label className="small text-muted fw-bold mb-1 text-info">Thuộc Kích Cỡ</label>
                                     <select className="form-select border-info fw-bold text-dark" value={addForm.size_group} onChange={(e) => setAddForm({ ...addForm, size_group: e.target.value })}>
+                                        {/* 💡 THÊM DÒNG NÀY ĐỂ XƯỞNG CHỌN CHO MÀNG CO, BĂNG KEO... */}
+                                        <option value="chung">Dùng chung (Tất cả kích cỡ)</option>
+
                                         <option value="250ml">250 ml</option>
                                         <option value="330ml">330 ml</option>
                                         <option value="350ml">350 ml</option>
@@ -566,8 +569,8 @@ function Products() {
                                                 ) : (
                                                     <>
                                                         <option value="cái">Cái</option>
-                                                        {/* <option value="kg">Kg</option>
-                                                        <option value="cuộn">Cuộn</option>
+                                                        <option value="kg">Kg</option>
+                                                        {/* <option value="cuộn">Cuộn</option>
                                                         <option value="mét">Mét</option> */}
                                                     </>
                                                 )}
@@ -587,6 +590,9 @@ function Products() {
                                             <div className="col-md-6">
                                                 <label className="small text-muted fw-bold mb-1 text-info">Thuộc Kích Cỡ</label>
                                                 <select className="form-select border-info fw-bold text-dark" value={editForm.size_group} onChange={(e) => setEditForm({ ...editForm, size_group: e.target.value })}>
+                                                    {/* 💡 THÊM DÒNG NÀY ĐỂ XƯỞNG CHỌN CHO MÀNG CO, BĂNG KEO... */}
+                                                    <option value="chung">Dùng chung (Tất cả kích cỡ)</option>
+
                                                     <option value="250ml">250 ml</option>
                                                     <option value="330ml">330 ml</option>
                                                     <option value="350ml">350 ml</option>
@@ -670,7 +676,7 @@ function Products() {
                                 <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
                                     <h5 className="fw-bold text-success mb-0">📦 Danh sách Sản Phẩm</h5>
                                     <div className="d-flex gap-2">
-                                        <div className="input-group shadow-sm" style={{ width: '250px' }}>
+                                        <div className="input-group shadow-sm" style={{ width: '200px' }}>
                                             <span className="input-group-text bg-white text-muted border-success"><i className="fa fa-search"></i></span>
                                             <input
                                                 type="text"
@@ -815,7 +821,7 @@ function Products() {
                                 <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
                                     <h5 className="fw-bold text-warning text-dark mb-0">🛠️ Danh sách Nguyên Vật Liệu</h5>
                                     <div className="d-flex gap-2">
-                                        <div className="input-group shadow-sm" style={{ width: '250px' }}>
+                                        <div className="input-group shadow-sm" style={{ width: '200px' }}>
                                             <span className="input-group-text bg-white text-muted border-warning"><i className="fa fa-search"></i></span>
                                             <input
                                                 type="text"

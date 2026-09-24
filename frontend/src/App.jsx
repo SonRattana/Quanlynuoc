@@ -30,6 +30,8 @@ import MonthlyCosting from '../pages/MonthlyCosting'
 import ProtectedRoute from '../components/protectedroute'
 import SalesOrders from '../pages/salesorders'
 import BottleDeposits from '../pages/BottleDeposits'
+import MRP from '../pages/mrp'
+
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 
 function App() {
@@ -60,21 +62,19 @@ function App() {
                 <Route path="/lookup" element={<OrderLookup />} />
 
                 {/* ==========================================
-            3. NHÓM TÀI CHÍNH (Admin + Kế Toán)
+            3. NHÓM TÀI CHÍNH (Admin + Kế Toán + Sell)
         ========================================== */}
-                <Route path="/dashboard" element={<ProtectedRoute allowedRoles={['admin', 'ketoan']}><Dashboard /></ProtectedRoute>} />
-                <Route path="/reports" element={<ProtectedRoute allowedRoles={['admin', 'ketoan']}><Reports /></ProtectedRoute>} />
-                <Route path="/monthly-costing" element={<ProtectedRoute allowedRoles={['admin', 'ketoan']}><MonthlyCosting /></ProtectedRoute>} />
-                <Route path="/expenses" element={<ProtectedRoute allowedRoles={['admin', 'ketoan']}><Expenses /></ProtectedRoute>} />
+                <Route path="/dashboard" element={<ProtectedRoute allowedRoles={['admin', 'ketoan', 'nhanvien']}><Dashboard /></ProtectedRoute>} />
+                <Route path="/reports" element={<ProtectedRoute allowedRoles={['admin', 'ketoan', 'nhanvien']}><Reports /></ProtectedRoute>} />
+                <Route path="/monthly-costing" element={<ProtectedRoute allowedRoles={['admin', 'ketoan', 'nhanvien']}><MonthlyCosting /></ProtectedRoute>} />
+                <Route path="/expenses" element={<ProtectedRoute allowedRoles={['admin', 'ketoan', 'nhanvien']}><Expenses /></ProtectedRoute>} />
 
                 {/* ==========================================
             4. NHÓM SẢN XUẤT KHO (Admin + Sản Xuất)
         ========================================== */}
                 <Route path="/products" element={<ProtectedRoute allowedRoles={['admin', 'sanxuat', 'ketoan']}><Products /></ProtectedRoute>} />
-                <Route path="/stock" element={<ProtectedRoute allowedRoles={['admin', 'sanxuat', 'ketoan']}><Stock /></ProtectedRoute>} />
-                <Route path="/bomsetup" element={<ProtectedRoute allowedRoles={['admin', 'sanxuat']}><BomSetup /></ProtectedRoute>} />
+                <Route path="/stock" element={<ProtectedRoute allowedRoles={['admin', 'sanxuat', 'ketoan', 'nhanvien']}><Stock /></ProtectedRoute>} />
                 <Route path="/purchases" element={<ProtectedRoute allowedRoles={['admin', 'sanxuat', 'ketoan']}><Purchases /></ProtectedRoute>} />
-                <Route path="/production" element={<ProtectedRoute allowedRoles={['admin', 'sanxuat']}><Production /></ProtectedRoute>} />
                 <Route path="/production-history" element={<ProtectedRoute allowedRoles={['admin', 'sanxuat', 'ketoan']}><ProductionHistory /></ProtectedRoute>} />
                 <Route path="/production-config" element={<ProtectedRoute allowedRoles={['admin', 'sanxuat']}><ProductionConfig /></ProtectedRoute>} />
 
@@ -86,15 +86,25 @@ function App() {
                 <Route path="/invoices" element={<ProtectedRoute allowedRoles={['admin', 'nhanvien', 'ketoan']}><Invoice /></ProtectedRoute>} />
                 <Route path="/invoice/:id" element={<ProtectedRoute allowedRoles={['admin', 'nhanvien', 'ketoan']}><Invoice /></ProtectedRoute>} />
                 <Route path="/orders" element={<ProtectedRoute allowedRoles={['admin', 'nhanvien']}><Orders /></ProtectedRoute>} />
-                <Route path="/sales-orders" element={<ProtectedRoute allowedRoles={['admin', 'nhanvien', 'ketoan']}><SalesOrders /></ProtectedRoute>} />
+                <Route path="/sales-orders" element={<ProtectedRoute allowedRoles={['admin', 'nhanvien', 'ketoan', 'sanxuat']}><SalesOrders /></ProtectedRoute>} />
                 <Route path="/bottle-deposits" element={<ProtectedRoute allowedRoles={['admin', 'nhanvien', 'ketoan']}><BottleDeposits /></ProtectedRoute>} />
+                <Route path="/mrp" element={<ProtectedRoute allowedRoles={['admin', 'sanxuat', 'nhanvien', 'ketoan']}><MRP /></ProtectedRoute>} />
                 {/* ==========================================
-            6. NHÓM HỆ THỐNG CỐT LÕI (Chỉ Admin)
+
+            6. Nhóm Admin + Sản xuất + Kế Toán
+            ========================================== */}
+                <Route path="/bomsetup" element={<ProtectedRoute allowedRoles={['admin', 'sanxuat', 'ketoan']}><BomSetup /></ProtectedRoute>} />
+                <Route path="/production" element={<ProtectedRoute allowedRoles={['admin', 'sanxuat', 'ketoan']}><Production /></ProtectedRoute>} />
+
+
+                {/* ==========================================
+            
+            7. NHÓM HỆ THỐNG CỐT LÕI (Chỉ Admin)
         ========================================== */}
                 <Route path="/users" element={<ProtectedRoute allowedRoles={['admin']}><Users /></ProtectedRoute>} />
                 <Route path="/logs" element={<ProtectedRoute allowedRoles={['admin']}><SystemLogs /></ProtectedRoute>} />
                 {/* ==========================================
-            7. HỐ ĐEN VŨ TRỤ: BẢO MẬT CUỐI CÙNG
+            8. HỐ ĐEN VŨ TRỤ: BẢO MẬT CUỐI CÙNG
             Gõ link tào lao sẽ bị đá về "Mặt tiền mới" ở trên
         ========================================== */}
                 <Route path="*" element={<Navigate to="/" replace />} />

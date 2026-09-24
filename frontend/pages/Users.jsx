@@ -134,6 +134,7 @@ function Users() {
                                 onChange={(e) => setForm({ ...form, role: e.target.value })}
                             >
                                 <option value="user">Nhân viên (User)</option>
+                                <option value="nhanvien">Sell</option>
                                 <option value="ketoan">Kế toán</option>
                                 <option value="sanxuat">Sản xuất</option>
                                 <option value="admin">Quản lý (Admin)</option>
@@ -172,6 +173,8 @@ function Users() {
                                                 <span className="badge bg-success">Kế toán</span>
                                             ) : u.role === 'sanxuat' ? (
                                                 <span className="badge bg-warning text-dark">Sản xuất</span>
+                                            ) : u.role === 'nhanvien' ? (
+                                                <span className="badge bg-info">Sell</span>
                                             ) : (
                                                 <span className="badge bg-secondary">Nhân viên</span>
                                             )}
@@ -212,6 +215,7 @@ function Users() {
                                         <label className="form-label fw-bold">Quyền hạn (Role)</label>
                                         <select className="form-select fw-bold" value={editForm.role} onChange={e => setEditForm({ ...editForm, role: e.target.value })}>
                                             <option value="user">Nhân Viên (User)</option>
+                                            <option value="nhanvien">Sell</option>
                                             <option value="ketoan">Kế toán</option>
                                             <option value="sanxuat">Sản xuất</option>
                                             <option value="admin">Quản lý (Admin)</option>

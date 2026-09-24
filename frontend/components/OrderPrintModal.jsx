@@ -94,6 +94,24 @@ export default function OrderPrintModal({ orderId, onClose }) {
     return (
         <>
             <div className="modal fade show d-block" style={{ backgroundColor: "rgba(0,0,0,0.6)" }}>
+
+                {/* 💡 CHÈN THÊM ĐOẠN STYLE CSS NÀY ĐỂ ÉP ZOOM TRÊN ĐIỆN THOẠI */}
+                <style>{`
+                    @media screen and (max-width: 768px) {
+                        /* Tự động thu nhỏ bản Preview xuống 65% trên màn hình điện thoại */
+                        #printable-order, #printable-invoice {
+                            zoom: 0.65;
+                            margin: 0 auto;
+                        }
+                        /* Ép thẻ chứa Modal vừa khít màn hình, không bị rớt lề */
+                        .modal-dialog {
+                            margin: 0.5rem;
+                            max-width: 100% !important;
+                        }
+                    }
+                `}</style>
+                {/* 💡 KẾT THÚC ĐOẠN CHÈN */}
+
                 <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: paperSize === '80mm' ? '400px' : '650px' }}>
                     <div className="modal-content border-0 shadow-lg">
 
@@ -110,7 +128,7 @@ export default function OrderPrintModal({ orderId, onClose }) {
                             </div>
                         </div>
 
-                        <div className="modal-body p-4" id="printable-order" style={{ backgroundColor: '#fff', color: '#000', fontFamily: 'Arial, sans-serif' }}>
+                        <div className="modal-body p-3 p-md-4 overflow-auto" id="printable-order" style={{ backgroundColor: '#fff', color: '#000', fontFamily: 'Arial, sans-serif' }}>
                             <div className="hospital-header text-center" style={{ marginBottom: paperSize === 'A5' ? '15px' : '8px' }}>
                                 <img src={logo} alt="Logo" style={{ width: paperSize === 'A5' ? '150px' : '120px', height: 'auto', objectFit: 'contain' }} />
                                 <div className="fw-bold fs-large" style={{ textTransform: 'uppercase' }}>MITAFRESH</div>
@@ -224,28 +242,28 @@ export default function OrderPrintModal({ orderId, onClose }) {
 
                             {/* 💡 CHÂN TRANG: ĐIỀU KIỆN & QUẢNG CÁO */}
                             {paperSize === '80mm' && (
-                            <div className="text-center mt-4 text-dark fw-bold" style={{ fontSize: paperSize === '80mm' ? '11px' : '13px', lineHeight: '1.4' }}>
-                                <div style={{ borderTop: '1px dashed #000', margin: '8px 0' }}></div>
-                                <div style={{ textAlign: 'left', padding: '0 5px', marginBottom: '8px' }}>
-                                    <div className="fw-bold text-decoration-underline mb-1" style={{ fontSize: paperSize === '80mm' ? '12px' : '14px' }}>Điều Kiện Giao Hàng:</div>
-                                    <ul className="fw-bold" style={{ paddingLeft: '15px', margin: 0 }}>
-                                        <li>Bình 20L: Giao từ 5 bình trở lên.</li>
-                                        <li>Bình 5L: Giao từ 4 bình trở lên.</li>
-                                        <li>Lốc (250ml - 350ml - 500ml - 1.5L): Giao từ 10 lốc trở lên (hoặc mua kèm bình 20L).</li>
-                                    </ul>
+                                <div className="text-center mt-4 text-dark fw-bold" style={{ fontSize: paperSize === '80mm' ? '11px' : '13px', lineHeight: '1.4' }}>
+                                    <div style={{ borderTop: '1px dashed #000', margin: '8px 0' }}></div>
+                                    <div style={{ textAlign: 'left', padding: '0 5px', marginBottom: '8px' }}>
+                                        <div className="fw-bold text-decoration-underline mb-1" style={{ fontSize: paperSize === '80mm' ? '12px' : '14px' }}>Điều Kiện Giao Hàng:</div>
+                                        <ul className="fw-bold" style={{ paddingLeft: '15px', margin: 0 }}>
+                                            <li>Bình 20L: Giao từ 5 bình trở lên.</li>
+                                            <li>Bình 5L: Giao từ 4 bình trở lên.</li>
+                                            <li>Lốc (250ml - 350ml - 500ml - 1.5L): Giao từ 10 lốc trở lên (hoặc mua kèm bình 20L).</li>
+                                        </ul>
+                                    </div>
+                                    <div style={{ borderTop: '1px dashed #000', margin: '8px 0' }}></div>
+                                    <div className="fw-bold" style={{ fontSize: paperSize === '80mm' ? '16px' : '18px', fontStyle: 'italic', marginBottom: '2px' }}>Mita Fresh</div>
+                                    <div className="fw-bold" style={{ fontSize: paperSize === '80mm' ? '12px' : '14px', marginBottom: '3px' }}>NƯỚC UỐNG SIÊU TINH KHIẾT</div>
+                                    <div className="fw-bold" style={{ fontSize: paperSize === '80mm' ? '11px' : '13px', textAlign: 'left', padding: '0 5px' }}>
+                                        • Sản xuất khép kín, diệt khuẩn tia UV an toàn.<br />
+                                        • Lọc công nghệ R.O, đạt chuẩn TDS &lt; 20 mg/l.<br />
+                                        • Lựa chọn hàng đầu bảo vệ sức khỏe gia đình.
+                                    </div>
+                                    <div style={{ borderTop: '1px dashed #000', margin: '8px 0' }}></div>
+                                    <div className="fw-bold" style={{ fontSize: paperSize === '80mm' ? '12px' : '14px' }}>Cảm ơn Quý Khách đã tin dùng Mita Fresh!</div>
+                                    <div className="fw-bold" style={{ fontSize: paperSize === '80mm' ? '12px' : '14px' }}>Tổng đài hỗ trợ: <b>0824 009 779 - 0973 141 307</b></div>
                                 </div>
-                                <div style={{ borderTop: '1px dashed #000', margin: '8px 0' }}></div>
-                                <div className="fw-bold" style={{ fontSize: paperSize === '80mm' ? '16px' : '18px', fontStyle: 'italic', marginBottom: '2px' }}>Mita Fresh</div>
-                                <div className="fw-bold" style={{ fontSize: paperSize === '80mm' ? '12px' : '14px', marginBottom: '3px' }}>NƯỚC UỐNG SIÊU TINH KHIẾT</div>
-                                <div className="fw-bold" style={{ fontSize: paperSize === '80mm' ? '11px' : '13px', textAlign: 'left', padding: '0 5px' }}>
-                                    • Sản xuất khép kín, diệt khuẩn tia UV an toàn.<br />
-                                    • Lọc công nghệ R.O, đạt chuẩn TDS &lt; 20 mg/l.<br />
-                                    • Lựa chọn hàng đầu bảo vệ sức khỏe gia đình.
-                                </div>
-                                <div style={{ borderTop: '1px dashed #000', margin: '8px 0' }}></div>
-                                <div className="fw-bold" style={{ fontSize: paperSize === '80mm' ? '12px' : '14px' }}>Cảm ơn Quý Khách đã tin dùng Mita Fresh!</div>
-                                <div className="fw-bold" style={{ fontSize: paperSize === '80mm' ? '12px' : '14px' }}>Tổng đài hỗ trợ: <b>0824 009 779 - 0973 141 307</b></div>
-                            </div>
                             )}
                         </div>
 
