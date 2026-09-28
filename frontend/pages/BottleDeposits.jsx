@@ -9,7 +9,7 @@ export default function BottleDeposits() {
 
     const [showReturnModal, setShowReturnModal] = useState(false);
     // 💡 ĐÃ FIX: Thêm trường note: '' vào Form
-    const [returnForm, setReturnForm] = useState({ customer_id: null, customer_name: '', max_bottles: 0, return_qty: 0, deposit_price: 50000, note: '' });
+    const [returnForm, setReturnForm] = useState({ customer_id: null, customer_name: '', max_bottles: 0, return_qty: 0, lost_qty: 0, deposit_price: 50000, note: '' });
     const [searchTerm, setSearchTerm] = useState("");
     const [showHistoryModal, setShowHistoryModal] = useState(false);
     const [historyData, setHistoryData] = useState([]);
@@ -46,15 +46,16 @@ export default function BottleDeposits() {
             customer_id: customer.customer_id || null, invoice_id: customer.invoice_id || null,
             product_id: customer.product_id || null, product_name: customer.product_name,
             customer_name: customer.customer_name, max_bottles: customer.total_bottles_kept,
-            return_qty: customer.total_bottles_kept, deposit_price: calculatedPrice,
-            note: '' // 💡 ĐÃ FIX: Reset ghi chú mỗi lần mở form
+            return_qty: customer.total_bottles_kept, lost_qty: 0, deposit_price: calculatedPrice,
+            note: ''
         });
         setShowReturnModal(true);
     };
 
     const handleSubmitReturn = async (e) => {
         e.preventDefault();
-        if (returnForm.return_qty <= 0 || returnForm.return_qty > returnForm.max_bottles) return setToast({ message: "Số vỏ trả không hợp lệ!", type: "warning" });
+        const totalInput = returnForm.return_qty + returnForm.lost_qty;
+        if (totalInput <= 0 || totalInput > returnForm.max_bottles) return setToast({ message: "Tổng số vỏ xử lý không hợp lệ!", type: "warning" });
         try {
             const res = await api.post('api/bottle-deposits/return', returnForm, { headers: { Authorization: `Bearer ${token}` } });
             setToast({ message: res.data.message, type: "success" });
@@ -199,15 +200,28 @@ export default function BottleDeposits() {
                                         Đang nợ: {returnForm.max_bottles} vỏ [{returnForm.product_name}]
                                     </div>
 
-                                    <div className="bg-white p-3 p-md-4 rounded-4 shadow-sm border mb-3 text-center">
-                                        <label className="fw-bold text-secondary mb-2 d-block text-uppercase small">Số vỏ khách ĐEM TRẢ</label>
-                                        <div className="input-group input-group-lg w-100 mx-auto">
-                                            <button className="btn btn-outline-primary" onClick={() => setReturnForm({ ...returnForm, return_qty: Math.max(1, returnForm.return_qty - 1) })}><i className="fa fa-minus"></i></button>
-                                            <input type="number" className="form-control fw-bold text-center text-primary fs-3 px-1" min="1" max={returnForm.max_bottles} value={returnForm.return_qty} onChange={(e) => setReturnForm({ ...returnForm, return_qty: Number(e.target.value) })} />
-                                            <button className="btn btn-outline-primary" onClick={() => setReturnForm({ ...returnForm, return_qty: Math.min(returnForm.max_bottles, returnForm.return_qty + 1) })}><i className="fa fa-plus"></i></button>
+                                    <div className="row g-2 mb-3">
+                                        <div className="col-6">
+                                            <div className="bg-white p-3 rounded-4 shadow-sm border h-100 text-center border-success border-bottom border-3">
+                                                <label className="fw-bold text-success mb-2 d-block text-uppercase" style={{ fontSize: '11px' }}>Số vỏ Nguyên Vẹn</label>
+                                                <div className="input-group input-group-sm w-100 mx-auto">
+                                                    <button className="btn btn-outline-success" onClick={() => setReturnForm({ ...returnForm, return_qty: Math.max(0, returnForm.return_qty - 1) })}><i className="fa fa-minus"></i></button>
+                                                    <input type="number" className="form-control fw-bold text-center text-success fs-5 px-1" min="0" max={returnForm.max_bottles - returnForm.lost_qty} value={returnForm.return_qty} onChange={(e) => setReturnForm({ ...returnForm, return_qty: Number(e.target.value) })} />
+                                                    <button className="btn btn-outline-success" onClick={() => setReturnForm({ ...returnForm, return_qty: Math.min(returnForm.max_bottles - returnForm.lost_qty, returnForm.return_qty + 1) })}><i className="fa fa-plus"></i></button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="col-6">
+                                            <div className="bg-white p-3 rounded-4 shadow-sm border h-100 text-center border-danger border-bottom border-3">
+                                                <label className="fw-bold text-danger mb-2 d-block text-uppercase" style={{ fontSize: '11px' }}>Số vỏ Báo Mất</label>
+                                                <div className="input-group input-group-sm w-100 mx-auto">
+                                                    <button className="btn btn-outline-danger" onClick={() => setReturnForm({ ...returnForm, lost_qty: Math.max(0, returnForm.lost_qty - 1) })}><i className="fa fa-minus"></i></button>
+                                                    <input type="number" className="form-control fw-bold text-center text-danger fs-5 px-1" min="0" max={returnForm.max_bottles - returnForm.return_qty} value={returnForm.lost_qty} onChange={(e) => setReturnForm({ ...returnForm, lost_qty: Number(e.target.value) })} />
+                                                    <button className="btn btn-outline-danger" onClick={() => setReturnForm({ ...returnForm, lost_qty: Math.min(returnForm.max_bottles - returnForm.return_qty, returnForm.lost_qty + 1) })}><i className="fa fa-plus"></i></button>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-
                                     {/* 💡 ĐÃ FIX: Khu vực nhập Ghi chú Tình trạng vỏ */}
                                     <div className="bg-white p-3 rounded-4 shadow-sm border mb-3 text-start">
                                         <label className="fw-bold text-secondary mb-2 small text-uppercase"><i className="fa fa-info-circle me-1"></i>Tình trạng vỏ / Khấu hao</label>

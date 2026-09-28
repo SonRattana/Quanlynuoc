@@ -73,6 +73,7 @@ export default function Reports() {
             if (reportType === "bottle_notes") endpoint = "/api/reports/bottle-notes";
             if (reportType === "customers") endpoint = "/api/reports/customers";
             if (reportType === "purchases") endpoint = "/api/reports/purchases";
+            if (reportType === "wastage_report") endpoint = "/api/production/wastage-report";
 
             if (reportType === "inventory_products" || reportType === "inventory_materials") {
                 endpoint = "/api/reports/inventory";
@@ -394,6 +395,22 @@ export default function Reports() {
             XLSX.utils.sheet_add_aoa(worksheet, [["TỔNG CỘNG NGUYÊN VẬT LIỆU:", totalStock]], { origin: -1 });
             fileName = `BaoCao_TonKho_NVL.xlsx`;
         }
+        else if (reportType === "wastage_report") {
+            excelData = data.map((item) => ({
+                "Tên Vật Tư (Nguyên liệu)": item.material_name,
+                "ĐVT": item.unit || "",
+                "Tổng Thực Dùng (Xưởng báo)": Number(item.used_qty),
+                "Định Mức Chuẩn (Lý thuyết)": Number(item.standard_qty),
+                "Số lượng Hao hụt": Number(item.wastage_qty),
+                "Tiền Thất Thoát (Ước tính)": Number(item.wastage_cost)
+            }));
+            columnWidths = [{ wpx: 200 }, { wpx: 60 }, { wpx: 150 }, { wpx: 150 }, { wpx: 120 }, { wpx: 150 }];
+            const totalLoss = data.reduce((sum, item) => sum + Number(item.wastage_cost), 0);
+            worksheet = XLSX.utils.json_to_sheet(excelData);
+            XLSX.utils.sheet_add_aoa(worksheet, [["TỔNG TIỀN THẤT THOÁT:", "", "", "", "", totalLoss]], { origin: -1 });
+            worksheet['!merges'] = [{ s: { r: data.length + 1, c: 0 }, e: { r: data.length + 1, c: 4 } }];
+            fileName = `BaoCao_HaoHut_SanXuat_${startDate}.xlsx`;
+        }
         else if (reportType === "purchases") {
             excelData = data.map((item) => ({
                 "Ngày Nhập": new Date(item.created_at).toLocaleDateString("vi-VN"),
@@ -405,6 +422,7 @@ export default function Reports() {
                 "Phí Ship": Number(item.total_fee_amount),
                 "Tổng Thanh Toán": Number(item.total_payment)
             }));
+
             columnWidths = [{ wpx: 100 }, { wpx: 80 }, { wpx: 200 }, { wpx: 120 }, { wpx: 120 }, { wpx: 120 }, { wpx: 120 }, { wpx: 150 }];
             const totalGoods = data.reduce((sum, item) => sum + Number(item.total_goods_amount || 0), 0);
             const totalVAT = data.reduce((sum, item) => sum + Number(item.vat_amount || 0), 0);
@@ -575,6 +593,16 @@ export default function Reports() {
             const totalStock = data.reduce((sum, item) => sum + Number(item.current_stock), 0);
             footData = [{ content: 'TỔNG CỘNG:', colSpan: 1, styles: { halign: 'right', fontStyle: 'bold' } }, { content: totalStock.toString(), styles: { fontStyle: 'bold', textColor: [33, 37, 41], halign: 'center' } }];
             fileName = `BaoCao_TonKho_NVL_${today}.pdf`;
+        }
+        else if (reportType === "wastage_report") {
+            title = "BÁO CÁO HAO HỤT SẢN XUẤT (WASTAGE REPORT)";
+            tableCols = ["Tên Vật Tư", "ĐVT", "Thực Dùng", "Định Mức", "Hao Hụt", "Tiền Thất Thoát"];
+            tableRows = data.map(item => [
+                item.material_name, item.unit || "", Number(item.used_qty), Number(item.standard_qty), item.wastage_qty > 0 ? `+${Number(item.wastage_qty)}` : "0", Number(item.wastage_cost).toLocaleString("vi-VN") + " đ"
+            ]);
+            const totalLoss = data.reduce((sum, item) => sum + Number(item.wastage_cost), 0);
+            footData = [{ content: 'TỔNG TIỀN THẤT THOÁT:', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } }, { content: totalLoss.toLocaleString("vi-VN") + " đ", styles: { fontStyle: 'bold', textColor: [220, 53, 69] } }];
+            fileName = `BaoCao_HaoHut_SanXuat_${startDate}.pdf`;
         }
         else if (reportType === "purchases") {
             title = "BÁO CÁO NHẬP HÀNG & THUẾ VAT ĐẦU VÀO";
@@ -749,6 +777,19 @@ export default function Reports() {
                 </div>
             );
         }
+        if (reportType === "wastage_report") {
+            return (
+                <div key={index} className="card shadow-sm border-0 mb-3 rounded-4 bg-white border-start border-danger border-4">
+                    <div className="card-body p-3">
+                        <div className="fw-bold text-dark fs-5 mb-2">{item.material_name}</div>
+                        {/* 💡 ĐÃ FIX: Tương tự, đổi tên biến và bọc Number() */}
+                        <div className="d-flex justify-content-between small mb-1"><span className="text-muted">Thực dùng / Định mức:</span> <strong>{Number(item.used_qty)} / {Number(item.standard_qty)}</strong></div>
+                        <div className="d-flex justify-content-between mt-2 pt-2 border-top"><span className="fw-bold text-dark">SỐ LƯỢNG HAO HỤT:</span> <strong className="text-danger fs-5">{item.wastage_qty > 0 ? `+ ${Number(item.wastage_qty)}` : 0}</strong></div>
+                        <div className="d-flex justify-content-between mt-1"><span className="fw-bold text-dark">TIỀN THẤT THOÁT:</span> <strong className="text-danger fs-5">{formatMoney(item.wastage_cost)} đ</strong></div>
+                    </div>
+                </div>
+            );
+        }
         // Thẻ mặc định cho các reportType còn lại
         return (
             <div key={index} className="card shadow-sm border-0 mb-3 rounded-4 bg-white">
@@ -783,7 +824,12 @@ export default function Reports() {
                         <div className="col-12 col-xl-3">
                             <label className="form-label fw-bold small text-secondary text-uppercase">Loại Báo Cáo</label>
                             <select className="form-select form-select-lg border-primary shadow-sm fw-bold text-primary bg-light text-truncate"
-                                style={{ maxWidth: '100%' }}
+                                style={{
+                                    maxWidth: '100%',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap', // Bắt buộc nằm trên 1 dòng
+                                    overflow: 'hidden' // Cắt đi phần dư thừa
+                                }}
                                 value={reportType}
                                 onChange={(e) => {
                                     setReportType(e.target.value);
@@ -803,6 +849,7 @@ export default function Reports() {
                                 <option value="inventory_products">📦 Báo cáo Tồn kho Sản phẩm</option>
                                 <option value="inventory_materials">🔧 Báo cáo Tồn kho NVL</option>
                                 <option value="purchases">🛒 Báo cáo Nhập Hàng & Thuế VAT</option>
+                                <option value="wastage_report">⚠️ Báo cáo Hao hụt Sản xuất</option>
                             </select>
                         </div>
 
@@ -947,6 +994,9 @@ export default function Reports() {
                                     <tr className="text-nowrap">
                                         <th className="ps-4">Ngày Nhập</th><th>Mã PN</th><th className="text-start">Nhà Cung Cấp</th><th>Mã HĐ/ CT</th><th className="text-end">Tiền Hàng</th><th className="text-end">Thuế VAT</th><th className="text-end">Phí Ship</th><th className="text-end pe-4">Tổng Thanh Toán</th>
                                     </tr>
+                                )}
+                                {reportType === "wastage_report" && (
+                                    <tr><th className="text-start ps-4">Tên Nguyên Vật Liệu</th><th>ĐVT</th><th>Tổng Thực Dùng</th><th>Định Mức Chuẩn</th><th>Số lượng Hao hụt</th><th className="text-end pe-4">Tiền Thất Thoát</th></tr>
                                 )}
                             </thead>
 
@@ -1111,6 +1161,16 @@ export default function Reports() {
                                                         <td className="text-end text-danger fw-bold fs-6 pe-4">{formatMoney(item.total_payment)} đ</td>
                                                     </>
                                                 )}
+                                                {reportType === "wastage_report" && (
+                                                    <>
+                                                        <td className="text-start fw-bold text-dark ps-4">{item.material_name}</td>
+                                                        <td className="text-muted">{item.unit || "---"}</td>
+                                                        <td className="text-primary fw-bold fs-5">{Number(item.used_qty)}</td>
+                                                        <td className="text-success fw-bold fs-5">{Number(item.standard_qty)}</td>
+                                                        <td className="text-danger fw-bold fs-5">{item.wastage_qty > 0 ? `+ ${Number(item.wastage_qty)}` : 0}</td>
+                                                        <td className="text-end fw-bold text-danger pe-4">{formatMoney(item.wastage_cost)} đ</td>
+                                                    </>
+                                                )}
                                             </tr>
                                         ))
                                     )
@@ -1198,6 +1258,12 @@ export default function Reports() {
                                             <td className="text-end fw-bold text-info fs-5">{formatMoney(data.reduce((sum, item) => sum + Number(item.vat_amount || 0), 0))} đ</td>
                                             <td className="text-end fw-bold text-warning fs-5">{formatMoney(data.reduce((sum, item) => sum + Number(item.total_fee_amount || 0), 0))} đ</td>
                                             <td className="text-end fw-bold text-danger fs-5 pe-4">{formatMoney(data.reduce((sum, item) => sum + Number(item.total_payment || 0), 0))} đ</td>
+                                        </tr>
+                                    )}
+                                    {reportType === "wastage_report" && (
+                                        <tr className="table-light border-top border-2 border-danger">
+                                            <td colSpan="5" className="text-end fw-bold text-danger pe-3">TỔNG TIỀN THẤT THOÁT:</td>
+                                            <td className="text-end fw-bold text-danger fs-5 pe-4">{formatMoney(data.reduce((sum, item) => sum + Number(item.wastage_cost), 0))} đ</td>
                                         </tr>
                                     )}
                                 </tfoot>

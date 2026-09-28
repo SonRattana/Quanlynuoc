@@ -3,7 +3,7 @@ export default function StockForm({
   title, type, products, warehouses, form, setForm, onSubmit, buttonClass, pendingOrders
 }) {
   const departments = [
-    "Khoa Cấp Cứu", "Khoa Khám Bệnh", "Khoa Hồi Sức Cấp Cứu", "Phòng Mổ",
+    "Nhà Thuốc", "Nhận Bệnh A", "Nhận Bệnh B", "Nhận Bệnh C", "Khoa Cấp Cứu", "Khoa Khám Bệnh", "Khoa Hồi Sức Cấp Cứu", "Phòng Mổ",
     "Khoa Nội", "Khoa Ngoại", "Khoa Nhi", "Khoa Sản",
     "Khoa Xét Nghiệm", "X-Quang", "Phòng Kế Hoạch-Tổng Hợp", "Phòng Giám Đốc", "Khác..."
   ];

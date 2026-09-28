@@ -388,8 +388,11 @@ function Stock() {
                 {activeTab === "thanh_pham" ? "Danh sách Nước Đóng Chai / Lốc" : "Cảnh báo nguyên vật liệu Sản Xuất"}
               </h5>
 
-              <div className="d-flex gap-2 flex-grow-1 justify-content-end" style={{ maxWidth: "600px" }}>
-                <div className="input-group shadow-sm">
+              {/* 💡 ĐÃ FIX: Thêm flex-column cho mobile và flex-md-row cho máy tính */}
+              <div className="d-flex flex-column flex-md-row gap-2 flex-grow-1 justify-content-md-end w-100" style={{ maxWidth: "600px" }}>
+
+                {/* 💡 THÊM w-100 để ô tìm kiếm tràn viền trên điện thoại */}
+                <div className="input-group shadow-sm w-100">
                   <span className="input-group-text bg-light border-secondary"><i className="bi bi-search text-muted"></i></span>
                   <input
                     type="text"
@@ -399,9 +402,11 @@ function Stock() {
                     onChange={(e) => setSearchKeyword(e.target.value)}
                   />
                 </div>
+
+                {/* 💡 BỎ flexShrink: 0 VÀ CHUYỂN THÀNH minWidth để tự co giãn */}
                 <select
-                  className="form-select border-secondary fw-bold shadow-sm"
-                  style={{ width: "220px", flexShrink: 0 }}
+                  className="form-select border-secondary fw-bold shadow-sm w-100"
+                  style={{ minWidth: "220px" }}
                   value={filterWarehouse}
                   onChange={(e) => setFilterWarehouse(e.target.value)}
                 >
@@ -443,30 +448,38 @@ function Stock() {
                         const costPrice = prodInfo?.cost_price || 0;
                         const totalValue = item.quantity * costPrice;
 
+                        // 💡 Lấy định mức an toàn từ Database của chính sản phẩm đó
+                        const minStock = Number(prodInfo?.min_stock || 0);
+
                         return (
                           <tr key={index}>
                             <td data-label="STT">{(currentData.currentPage - 1) * ITEMS_PER_PAGE + index + 1}</td>
                             <td data-label="Tên Hàng Hóa" className="text-start fw-bold text-dark">{item.product_name}</td>
                             <td data-label="Thuộc Kho"><span className="badge bg-light text-dark border">{item.warehouse_name}</span></td>
+
                             <td data-label="Số Lượng Tồn">
-                              <span className={`fw-bold fs-5 ${item.quantity <= 10 ? 'text-danger' : 'text-primary'}`}>
-                                {Number(item.quantity)}
+                              {/* 💡 Số đổi màu đỏ nếu dưới minStock và được format dấu phẩy chuẩn VN */}
+                              <span className={`fw-bold fs-5 ${Number(item.quantity) <= minStock ? 'text-danger' : 'text-primary'}`}>
+                                {Number(item.quantity).toLocaleString('vi-VN', { maximumFractionDigits: 3 })}
                               </span>
-                              {/* 💡 ĐÃ FIX: Thêm đơn vị tính vào ngay phía sau con số */}
                               <span className="ms-1 text-muted small fw-bold">
                                 {prodInfo?.unit}
                               </span>
                             </td>
+
                             {activeTab === "thanh_pham" && (
                               <td data-label="Giá Trị Tồn (Vốn)" className="fw-bold text-success">{formatMoney(totalValue)}</td>
                             )}
+
                             <td data-label="Tình Trạng">
-                              {item.quantity <= 0
+                              {Number(item.quantity) <= 0
                                 ? <span className="badge bg-danger">Hết hàng</span>
-                                : item.quantity <= 24 ? <span className="badge bg-warning text-dark">Sắp hết hàng!</span>
+                                : Number(item.quantity) <= minStock
+                                  ? <span className="badge bg-warning text-dark"><i className="fa fa-exclamation-triangle me-1"></i>Sắp hết hàng!</span>
                                   : <span className="badge bg-success">Còn hàng</span>
                               }
                             </td>
+
                             <td data-label="Thẻ Kho">
                               <button className="btn btn-sm btn-outline-primary fw-bold" onClick={() => openTheKho(item.product_name)}>
                                 <i className="fa fa-history me-1"></i>Xem
@@ -547,7 +560,6 @@ function Stock() {
                     <thead className="table-success align-middle sticky-top" style={{ zIndex: 2 }}>
                       <tr>
                         <th rowSpan="2" className="text-start bg-success text-white" style={{ width: '20%' }}>Tên Thành Phẩm</th>
-                        {/* 💡 THÊM CỘT TỒN KHO ĐẦU KỲ */}
                         <th colSpan="2" className="bg-secondary text-white border-end border-white">TỒN KHO ĐẦU KỲ</th>
                         <th colSpan="2" className="bg-primary text-white border-end border-white">NHẬP KHO</th>
                         <th colSpan="2" className="bg-warning text-dark border-end border-white">XUẤT KHO (Bán ra)</th>
@@ -567,7 +579,6 @@ function Stock() {
                     <tbody>
                       {nxtTP.items.length === 0 ? <tr><td colSpan="9" className="text-muted py-4 fst-italic">Không có dữ liệu thành phẩm...</td></tr> :
                         nxtTP.items.map((item, idx) => {
-                          // 💡 Tự động tính TỒN KHO ĐẦU KỲ bằng Toán học: Tồn Đầu = Tồn Cuối - Nhập + Xuất
                           const tonDauSl = Number(item.ton_sl) - Number(item.nhap_sl) + Number(item.xuat_sl);
                           const tonDauTt = Number(item.ton_tt) - Number(item.nhap_tt) + Number(item.xuat_tt);
 
@@ -576,19 +587,20 @@ function Stock() {
                               <td data-label="Tên Thành Phẩm" className="text-start fw-bold text-dark">{item.name} <span className="badge bg-light text-secondary ms-1">{item.unit}</span></td>
 
                               {/* TỒN ĐẦU */}
-                              <td data-label="Tồn Đầu (SL)" className="text-secondary fw-bold fs-6">{Number(tonDauSl)}</td>
+                              {/* 💡 ĐÃ FIX: Hàm toLocaleString('vi-VN', { maximumFractionDigits: 3 }) tự cắt số đuôi lẻ dài thòng lòng, tối đa chừa 3 số sau dấu phẩy */}
+                              <td data-label="Tồn Đầu (SL)" className="text-secondary fw-bold fs-6">{Number(tonDauSl).toLocaleString('vi-VN', { maximumFractionDigits: 3 })}</td>
                               <td data-label="Tồn Đầu (TT)" className="text-secondary">{formatMoney(tonDauTt)}</td>
 
                               {/* NHẬP KHO */}
-                              <td data-label="Nhập Kho (SL)" className="text-primary fw-bold fs-6">{Number(item.nhap_sl)}</td>
+                              <td data-label="Nhập Kho (SL)" className="text-primary fw-bold fs-6">{Number(item.nhap_sl).toLocaleString('vi-VN', { maximumFractionDigits: 3 })}</td>
                               <td data-label="Nhập Kho (TT)" className="text-primary">{formatMoney(item.nhap_tt)}</td>
 
                               {/* XUẤT KHO */}
-                              <td data-label="Xuất Kho (SL)" className="text-warning text-dark fw-bold fs-6">{Number(item.xuat_sl)}</td>
+                              <td data-label="Xuất Kho (SL)" className="text-warning text-dark fw-bold fs-6">{Number(item.xuat_sl).toLocaleString('vi-VN', { maximumFractionDigits: 3 })}</td>
                               <td data-label="Xuất Kho (TT)" className="text-warning text-dark">{formatMoney(item.xuat_tt)}</td>
 
                               {/* TỒN CUỐI */}
-                              <td data-label="Tồn Cuối (SL)" className={`fw-bold fs-5 ${item.ton_sl <= 0 ? 'text-danger' : 'text-success'}`}>{Number(item.ton_sl)}</td>
+                              <td data-label="Tồn Cuối (SL)" className={`fw-bold fs-5 ${item.ton_sl <= 0 ? 'text-danger' : 'text-success'}`}>{Number(item.ton_sl).toLocaleString('vi-VN', { maximumFractionDigits: 3 })}</td>
                               <td data-label="Giá Trị Tồn (TT)" className="fw-bold text-danger fs-6">{formatMoney(item.ton_tt)}</td>
                             </tr>
                           )
@@ -612,7 +624,6 @@ function Stock() {
                     <thead className="table-warning align-middle sticky-top" style={{ zIndex: 2 }}>
                       <tr>
                         <th rowSpan="2" className="text-start bg-warning text-dark" style={{ width: '20%' }}>Tên Nguyên Vật Liệu</th>
-                        {/* 💡 THÊM CỘT TỒN KHO ĐẦU KỲ */}
                         <th colSpan="2" className="bg-secondary text-white border-end border-white">TỒN KHO ĐẦU KỲ</th>
                         <th colSpan="2" className="bg-primary text-white border-end border-white">NHẬP KHO (Mua vào)</th>
                         <th colSpan="2" className="bg-danger text-white border-end border-white">XUẤT KHO (Đưa đi SX)</th>
@@ -632,7 +643,6 @@ function Stock() {
                     <tbody>
                       {nxtNVL.items.length === 0 ? <tr><td colSpan="9" className="text-muted py-4 fst-italic">Không có dữ liệu nguyên vật liệu...</td></tr> :
                         nxtNVL.items.map((item, idx) => {
-                          // 💡 Tính TỒN KHO ĐẦU KỲ cho NVL
                           const tonDauSl = Number(item.ton_sl) - Number(item.nhap_sl) + Number(item.xuat_sl);
                           const tonDauTt = Number(item.ton_tt) - Number(item.nhap_tt) + Number(item.xuat_tt);
 
@@ -641,19 +651,20 @@ function Stock() {
                               <td data-label="Tên NVL" className="text-start fw-bold text-dark">{item.name} <span className="badge bg-light text-secondary ms-1">{item.unit}</span></td>
 
                               {/* TỒN ĐẦU */}
-                              <td data-label="Tồn Đầu(SL)" className="text-secondary fw-bold fs-6">{Number(tonDauSl)}</td>
+                              {/* 💡 ĐÃ FIX tương tự như bảng Thành phẩm */}
+                              <td data-label="Tồn Đầu(SL)" className="text-secondary fw-bold fs-6">{Number(tonDauSl).toLocaleString('vi-VN', { maximumFractionDigits: 3 })}</td>
                               <td data-label="Tồn Đầu(TT)" className="text-secondary">{formatMoney(tonDauTt)}</td>
 
                               {/* NHẬP KHO */}
-                              <td data-label="Nhập Kho(SL)" className="text-primary fw-bold fs-6">{Number(item.nhap_sl)}</td>
+                              <td data-label="Nhập Kho(SL)" className="text-primary fw-bold fs-6">{Number(item.nhap_sl).toLocaleString('vi-VN', { maximumFractionDigits: 3 })}</td>
                               <td data-label="Nhập Kho(TT)" className="text-primary">{formatMoney(item.nhap_tt)}</td>
 
                               {/* XUẤT KHO */}
-                              <td data-label="Xuất Kho(SL)" className="text-danger fw-bold fs-6">{Number(item.xuat_sl)}</td>
+                              <td data-label="Xuất Kho(SL)" className="text-danger fw-bold fs-6">{Number(item.xuat_sl).toLocaleString('vi-VN', { maximumFractionDigits: 3 })}</td>
                               <td data-label="Xuất Kho(TT)" className="text-danger">{formatMoney(item.xuat_tt)}</td>
 
                               {/* TỒN CUỐI */}
-                              <td data-label="Tồn Cuối(SL)" className={`fw-bold fs-5 ${item.ton_sl <= 0 ? 'text-danger' : 'text-dark'}`}>{Number(item.ton_sl)}</td>
+                              <td data-label="Tồn Cuối(SL)" className={`fw-bold fs-5 ${item.ton_sl <= 0 ? 'text-danger' : 'text-dark'}`}>{Number(item.ton_sl).toLocaleString('vi-VN', { maximumFractionDigits: 3 })}</td>
                               <td data-label="Tồn Cuối(TT)" className="fw-bold text-danger fs-6">{formatMoney(item.ton_tt)}</td>
                             </tr>
                           )

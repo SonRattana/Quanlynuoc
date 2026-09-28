@@ -23,7 +23,6 @@ function Products() {
     const [searchProduct, setSearchProduct] = useState("");
     const [searchMaterial, setSearchMaterial] = useState("");
 
-    // 💡 TỪ ĐÂY: KHAI BÁO STATE CHO 2 BỘ LỌC
     // 1. Lọc Sản Phẩm (TP)
     const [showFilterTP, setShowFilterTP] = useState(false);
     const [filterKhoTP, setFilterKhoTP] = useState("");
@@ -64,7 +63,7 @@ function Products() {
 
     // ================= STATE & LOGIC THÊM SẢN PHẨM =================
     const [addForm, setAddForm] = useState({
-        name: "", volume: 330, unit: "chai", sell_price: "", deposit_price: "", image: null, item_type: "thanh_pham", size_group: "330ml", wholesale_price: "", wholesale_min_quantity: ""
+        name: "", volume: 330, unit: "chai", sell_price: "", deposit_price: "", image: null, item_type: "thanh_pham", size_group: "330ml", wholesale_price: "", wholesale_min_quantity: "", min_stock: ""
     });
 
     const handleAddTypeChange = (e) => {
@@ -79,7 +78,8 @@ function Products() {
             deposit_price: isNVL ? 0 : "",
             wholesale_price: isNVL ? 0 : "",
             wholesale_min_quantity: isNVL ? 0 : "",
-            size_group: isNVL ? "330ml" : "330ml"
+            // 💡 ĐÃ FIX: Khi chọn loại là Nguyên Vật Liệu, mặc định Size là Dùng chung ("chung") thay vì 330ml
+            size_group: isNVL ? "chung" : "330ml"
         });
     };
 
@@ -105,7 +105,7 @@ function Products() {
 
     // ================= STATE & LOGIC SỬA SẢN PHẨM =================
     const [editForm, setEditForm] = useState({
-        name: "", volume: "", unit: "chai", sell_price: "", deposit_price: "", image: null, item_type: "thanh_pham", size_group: "", wholesale_price: "", wholesale_min_quantity: ""
+        name: "", volume: "", unit: "chai", sell_price: "", deposit_price: "", image: null, item_type: "thanh_pham", size_group: "", wholesale_price: "", wholesale_min_quantity: "", min_stock: ""
     });
     const [editingId, setEditingId] = useState(null);
     const [showEdit, setShowEdit] = useState(false);
@@ -122,7 +122,8 @@ function Products() {
             deposit_price: isNVL ? 0 : editForm.deposit_price,
             wholesale_price: isNVL ? 0 : editForm.wholesale_price,
             wholesale_min_quantity: isNVL ? 0 : editForm.wholesale_min_quantity,
-            size_group: isNVL ? "330ml" : "330ml"
+            // 💡 ĐÃ FIX: Khi sửa loại hàng về Nguyên Vật Liệu, mặc định gán là Dùng chung
+            size_group: isNVL ? "chung" : "330ml"
         });
     };
 
@@ -182,6 +183,7 @@ function Products() {
         formData.append("wholesale_min_quantity", addForm.item_type === 'nguyen_lieu' ? 0 : addForm.wholesale_min_quantity);
         formData.append("deposit_price", addForm.item_type === 'nguyen_lieu' ? 0 : addForm.deposit_price);
         formData.append("requires_deposit", addForm.requires_deposit);
+        formData.append("min_stock", addForm.min_stock || 0);
         if (addForm.image) formData.append("image", addForm.image);
 
         try {
@@ -197,31 +199,33 @@ function Products() {
     };
 
     const handleEdit = (product) => {
-        let safeSizeGroup = (product.size_group || "").replace(/\s/g, "");
+        let safeSizeGroup = (product.size_group || "").trim();
 
-        // 💡 BẮT DUNG TÍCH THÔNG MINH BẰNG REGEX (AI THÊM 4L, 10L HAY 100L VÀO TÊN NÓ CŨNG TỰ BẮT ĐƯỢC)
-        if (!safeSizeGroup && product.item_type === 'nguyen_lieu') {
+        // 💡 ĐÃ FIX: CHỈ QUÉT DUNG TÍCH TỰ ĐỘNG CHO THÀNH PHẨM (KHÔNG QUÉT NVL NỮA)
+        if (!safeSizeGroup && product.item_type === 'thanh_pham') {
             const nameLower = (product.name || "").toLowerCase();
-
-            // Tìm con số (kể cả số thập phân như 1.5) đứng trước chữ ml, l, hoặc lít
             const match = nameLower.match(/(\d+(?:\.\d+)?)\s*(ml|l|lít)/);
 
             if (match) {
-                const number = match[1]; // Bốc con số ra (VD: 4, 1.5, 500)
-                const unit = (match[2] === 'lít' || match[2] === 'l') ? 'L' : 'ml'; // Chuẩn hóa đơn vị
-                safeSizeGroup = number + unit; // Ghép lại thành "4L", "1.5L", "500ml"
+                const number = match[1];
+                const unit = (match[2] === 'lít' || match[2] === 'l') ? 'L' : 'ml';
+                safeSizeGroup = number + unit;
             } else {
-                safeSizeGroup = "250ml"; // Nếu tên rỗng không có dung tích thì về mặc định
+                safeSizeGroup = "250ml";
             }
+        } else if (!safeSizeGroup && product.item_type === 'nguyen_lieu') {
+            // Nếu là NVL mà trống thì mặc định là Dùng chung
+            safeSizeGroup = "chung";
         }
 
         setEditForm({
             ...product,
-            size_group: safeSizeGroup || "250ml",
+            size_group: safeSizeGroup,
             sell_price: Math.round(Number(product.sell_price || 0)),
             deposit_price: Math.round(Number(product.deposit_price || 0)),
             wholesale_price: Math.round(Number(product.wholesale_price || 0)),
             wholesale_min_quantity: Math.round(Number(product.wholesale_min_quantity || 0)),
+            min_stock: (!product.min_stock || Number(product.min_stock) === 0) ? "" : Math.round(Number(product.min_stock)),
             image: product.image || null
         });
         setEditingId(product.id);
@@ -242,6 +246,7 @@ function Products() {
         formData.append("wholesale_min_quantity", editForm.item_type === 'nguyen_lieu' ? 0 : editForm.wholesale_min_quantity);
         formData.append("deposit_price", editForm.item_type === 'nguyen_lieu' ? 0 : editForm.deposit_price);
         formData.append("requires_deposit", editForm.requires_deposit);
+        formData.append("min_stock", editForm.min_stock || 0);
         if (editForm.image) formData.append("image", editForm.image);
 
         try {
@@ -295,21 +300,17 @@ function Products() {
 
     // 💡 THUẬT TOÁN LỌC KẾT HỢP (TÌM KIẾM + DROPDOWN)
     const filteredTpList = tpList.filter(p => {
-        // Lọc theo ô tìm kiếm
         const searchLower = String(searchProduct || "").toLowerCase().trim();
         const matchSearch = !searchLower || String(p.name || "").toLowerCase().includes(searchLower) || String(p.id).includes(searchLower);
 
-        // Lọc theo Kho chứa
         const kho = String(p.warehouse_name || p.warehouse || p.ten_kho || p.kho || "Chưa rõ kho").trim();
         const filterKho = String(filterKhoTP || "").trim();
         const matchKho = !filterKho ? true : kho === filterKho;
 
-        // Lọc theo Tên SP
         const ten = String(p.name || "").trim();
         const filterTen = String(filterTenTP || "").trim();
         const matchTen = !filterTen ? true : ten === filterTen;
 
-        // Lọc theo Dung tích
         const dungTich = String(p.volume || "").trim();
         const filterDungTich = String(filterDungTichTP || "").trim();
         const matchDungTich = !filterDungTich ? true : dungTich === filterDungTich;
@@ -352,7 +353,6 @@ function Products() {
         }
     };
 
-    // 💡 BẢNG XỔ XUỐNG CÓ THÊM CỘT "VỊ TRÍ KHO"
     const renderBatchesSubTable = (productId) => {
         const batches = batchesData[productId];
         const isLoading = loadingBatches[productId];
@@ -370,7 +370,6 @@ function Products() {
                         <tr>
                             <th style={{ width: '80px' }}>Thứ tự xuất</th>
                             <th>Lệnh SX / Mã Phiếu Nhập</th>
-                            {/* CỘT KHO MỚI */}
                             <th>Vị trí Kho</th>
                             <th>Ngày Tạo Lô</th>
                             <th>Tồn kho lô</th>
@@ -392,7 +391,6 @@ function Products() {
                                         <span className="text-secondary fw-bold">Lô #{b.id}</span>
                                     )}
                                 </td>
-                                {/* HIỂN THỊ KHO BÊN TRONG LÔ */}
                                 <td data-label="Vị trí Kho"><span className="badge bg-secondary"><i className="fa fa-warehouse me-1"></i>{b.warehouse_name || "Kho Tổng"}</span></td>
                                 <td data-label="Ngày Tạo Lô" className="small text-muted">{new Date(b.created_at).toLocaleString('vi-VN')}</td>
                                 <td data-label="Tồn kho lô"><span className="badge bg-primary fs-6">{formatNumber(b.quantity_remaining)}</span></td>
@@ -444,8 +442,6 @@ function Products() {
                                         <>
                                             <option value="cái">Cái</option>
                                             <option value="kg">Kg</option>
-                                            {/* <option value="cuộn">Cuộn</option>
-                                            <option value="mét">Mét</option> */}
                                         </>
                                     )}
                                 </select>
@@ -464,10 +460,11 @@ function Products() {
                                 <div className="col-md-2">
                                     <label className="small text-muted fw-bold mb-1 text-info">Thuộc Kích Cỡ</label>
                                     <select className="form-select border-info fw-bold text-dark" value={addForm.size_group} onChange={(e) => setAddForm({ ...addForm, size_group: e.target.value })}>
-                                        {/* 💡 THÊM DÒNG NÀY ĐỂ XƯỞNG CHỌN CHO MÀNG CO, BĂNG KEO... */}
+                                        {/* 💡 DANH SÁCH DROPDOWN CHO FORM THÊM MỚI */}
                                         <option value="chung">Dùng chung (Tất cả kích cỡ)</option>
-
-                                        <option value="250ml">250 ml</option>
+                                        <option value="cum_nho">Dùng chung (250ml, 350ml, 500ml)</option>
+                                        <option value="250ml_tron">250 ml (tròn)</option>
+                                        <option value="250ml_vuong">250 ml (vuông)</option>
                                         <option value="330ml">330 ml</option>
                                         <option value="350ml">350 ml</option>
                                         <option value="500ml">500 ml</option>
@@ -489,7 +486,7 @@ function Products() {
                                         <label className="small text-muted fw-bold mb-1">Giá Sỉ</label>
                                         <input type="number" className="form-control text-primary fw-bold" placeholder="Tùy chọn" value={addForm.wholesale_price} onChange={(e) => setAddForm({ ...addForm, wholesale_price: e.target.value })} />
                                     </div>
-                                    <div className="col-md-2 offset-md-6 mt-2">
+                                    <div className="col-md-2 offset mt-2">
                                         <label className="small text-muted fw-bold mb-1">Mốc Số Lượng Sỉ</label>
                                         <input type="number" className="form-control text-info fw-bold" placeholder="VD: 10 lốc" value={addForm.wholesale_min_quantity} onChange={(e) => setAddForm({ ...addForm, wholesale_min_quantity: e.target.value })} />
                                     </div>
@@ -497,20 +494,19 @@ function Products() {
                                         <label className="small text-muted fw-bold mb-1">Tiền cọc vỏ</label>
                                         <input type="number" className="form-control text-warning" placeholder="0" value={addForm.deposit_price} onChange={(e) => setAddForm({ ...addForm, deposit_price: e.target.value })} />
                                     </div>
-                                    <div className="form-check col-md-2 d-flex align-items-center">
+
+                                    <div className="form-check offset col-md-4 d-flex align-items-center">
                                         <input
                                             type="checkbox"
-                                            // 💡 Thêm border-2 border-dark để viền ô vuông dày và đen đậm
                                             className="form-check-input border border-2 border-dark shadow-sm"
-                                            // 💡 Phóng to ô vuông lên 1.3 lần cho dễ bấm
                                             style={{ transform: "scale(1.3)", cursor: "pointer", marginTop: "0" }}
                                             checked={addForm.requires_deposit === 1}
                                             onChange={(e) => setAddForm({ ...addForm, requires_deposit: e.target.checked ? 1 : 0 })}
-                                            id="check-coc-vo" // Thêm id để xài chung với label
+                                            id="check-coc-vo"
                                         />
                                         <label
                                             className="form-check-label ms-3 fw-bold text-dark"
-                                            htmlFor="check-coc-vo" // Bấm vào chữ nó cũng tự tick vào ô vuông
+                                            htmlFor="check-coc-vo"
                                             style={{ cursor: "pointer" }}
                                         >
                                             Sản phẩm này có cọc vỏ (Bình 20L/5L)
@@ -518,6 +514,19 @@ function Products() {
                                     </div>
                                 </>
                             )}
+                            <div className="col-md-4 mt-2">
+                                <label className="small text-muted fw-bold mb-1">
+                                    <i className="fa fa-bell text-warning me-1"></i>Mốc số lượng cảnh báo tồn hàng<span className="text-danger">*</span>
+                                </label>
+                                <input
+                                    type="number"
+                                    className="form-control text-dark fw-bold border-warning"
+                                    placeholder="VD: 50"
+                                    value={addForm.min_stock}
+                                    onChange={(e) => setAddForm({ ...addForm, min_stock: e.target.value })}
+                                    required /* 💡 ĐÃ FIX: Chặn lưu nếu bỏ trống */
+                                />
+                            </div>
 
                             {addForm.item_type === "thanh_pham" && (
                                 <div className="col-md-8 mt-2">
@@ -525,6 +534,7 @@ function Products() {
                                     <input id="addFileInput" type="file" className="form-control" accept="image/*" onChange={(e) => setAddForm({ ...addForm, image: e.target.files[0] })} />
                                 </div>
                             )}
+
                             <div className={`col-md-2 mt-3 ${addForm.item_type === 'nguyen_lieu' ? 'offset-md-10' : 'mt-4 pt-3'}`}>
                                 <button className="btn btn-primary w-100 fw-bold"><i className="fa fa-save me-1"></i> Lưu</button>
                             </div>
@@ -570,8 +580,6 @@ function Products() {
                                                     <>
                                                         <option value="cái">Cái</option>
                                                         <option value="kg">Kg</option>
-                                                        {/* <option value="cuộn">Cuộn</option>
-                                                        <option value="mét">Mét</option> */}
                                                     </>
                                                 )}
                                             </select>
@@ -590,10 +598,11 @@ function Products() {
                                             <div className="col-md-6">
                                                 <label className="small text-muted fw-bold mb-1 text-info">Thuộc Kích Cỡ</label>
                                                 <select className="form-select border-info fw-bold text-dark" value={editForm.size_group} onChange={(e) => setEditForm({ ...editForm, size_group: e.target.value })}>
-                                                    {/* 💡 THÊM DÒNG NÀY ĐỂ XƯỞNG CHỌN CHO MÀNG CO, BĂNG KEO... */}
+                                                    {/* 💡 DANH SÁCH DROPDOWN CHO MODAL EDIT */}
                                                     <option value="chung">Dùng chung (Tất cả kích cỡ)</option>
-
-                                                    <option value="250ml">250 ml</option>
+                                                    <option value="cum_nho">Dùng chung (250ml, 350ml, 500ml)</option>
+                                                    <option value="250ml_tron">250 ml (tròn)</option>
+                                                    <option value="250ml_vuong">250 ml (vuông)</option>
                                                     <option value="330ml">330 ml</option>
                                                     <option value="350ml">350 ml</option>
                                                     <option value="500ml">500 ml</option>
@@ -623,11 +632,12 @@ function Products() {
                                                     <label className="form-label">Tiền cọc vỏ</label>
                                                     <input type="number" className="form-control text-warning" value={editForm.deposit_price} onChange={(e) => setEditForm({ ...editForm, deposit_price: e.target.value })} />
                                                 </div>
+
                                                 <div className="col-12 mt-3">
                                                     <div className="form-check">
                                                         <input
                                                             type="checkbox"
-                                                            className="form-check-input"
+                                                            className="form-check-input border border-2 border-dark shadow-sm"
                                                             checked={editForm.requires_deposit === 1}
                                                             onChange={(e) => setEditForm({ ...editForm, requires_deposit: e.target.checked ? 1 : 0 })}
                                                         />
@@ -640,6 +650,16 @@ function Products() {
                                                 </div>
                                             </>
                                         )}
+                                        <div className="col-md-4 mt-4">
+                                            <label className="small text-muted fw-bold mb-1">
+                                                <i className="fa fa-bell text-warning me-1"></i>Mốc số lượng cảnh báo tồn hàng<span className="text-danger">*</span>
+                                            </label>
+                                            <input type="number" className="form-control text-dark fw-bold border-warning"
+                                                placeholder="VD: 50"
+                                                value={editForm.min_stock}
+                                                onChange={(e) => setEditForm({ ...editForm, min_stock: e.target.value })}
+                                                required />
+                                        </div>
                                     </div>
                                     <div className="modal-footer">
                                         <button type="button" className="btn btn-secondary" onClick={() => setShowEdit(false)}>Hủy</button>
@@ -672,7 +692,6 @@ function Products() {
                     <div className="mt-4">
                         {(filterType === "all" || filterType === "thanh_pham") && (
                             <div className="mb-5">
-                                {/* 💡 THANH TÌM KIẾM VÀ NÚT LỌC CỦA SẢN PHẨM */}
                                 <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
                                     <h5 className="fw-bold text-success mb-0">📦 Danh sách Sản Phẩm</h5>
                                     <div className="d-flex gap-2">
@@ -692,13 +711,11 @@ function Products() {
                                     </div>
                                 </div>
 
-                                {/* 💡 BẢNG DROPDOWN LỌC SẢN PHẨM */}
                                 {showFilterTP && (
                                     <div className="card card-body bg-light mb-3 shadow-sm border-success border-opacity-25 animate__animated animate__fadeIn">
                                         <div className="row g-3">
                                             <div className="col-md-4">
                                                 <label className="fw-bold small text-muted mb-1">🏢 Kho chứa</label>
-                                                {/* SẾP ĐỐI CHIẾU LẠI DÒNG NÀY XEM ĐÃ KHỚP 100% CHƯA NHÉ */}
                                                 <select className="form-select border-success border-opacity-50" value={filterKhoTP} onChange={e => { setFilterKhoTP(e.target.value); setPage(1); }}>
                                                     <option value="">-- Tất cả Kho --</option>
                                                     {uniqueKhoTP.map((k, i) => <option key={i} value={k}>{k}</option>)}
@@ -738,7 +755,6 @@ function Products() {
                                                 <th>Giá vốn (Lô đang xuất)</th>
                                                 <th>Giá bán (Lẻ/Sỉ)</th>
                                                 <th>Tiền cọc</th>
-                                                {/* 💡 ĐỔI TÊN CỘT TRÊN BẢNG CHÍNH */}
                                                 <th>Tồn Kho (Vị trí)</th>
                                                 <th className="text-center">Thao Tác</th>
                                             </tr>
@@ -770,7 +786,6 @@ function Products() {
 
                                                             <td data-label="Tiền cọc" className="fw-bold text-warning">{formatMoney(p.deposit_price)}</td>
 
-                                                            {/* 💡 HIỂN THỊ KHO VÀ ĐỊNH DẠNG LẠI SỐ LƯỢNG */}
                                                             <td data-label="Tồn Kho">
                                                                 <div className="fw-bold fs-5 text-primary">{formatNumber(p.quantity)}</div>
                                                                 <div className="text-muted small fw-bold">
@@ -798,7 +813,6 @@ function Products() {
                                                                 )}
                                                             </td>
                                                         </tr>
-                                                        {/* BẢNG XỔ XUỐNG BÊN DƯỚI DÒNG SẢN PHẨM */}
                                                         {expandedRows.includes(p.id) && (
                                                             <tr className="table-light">
                                                                 <td colSpan="8" className="p-0 border-bottom border-info border-3">
@@ -817,7 +831,6 @@ function Products() {
 
                         {(filterType === "all" || filterType === "nguyen_lieu") && (
                             <div className="mb-4">
-                                {/* 💡 THANH TÌM KIẾM VÀ NÚT LỌC CỦA NVL */}
                                 <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
                                     <h5 className="fw-bold text-warning text-dark mb-0">🛠️ Danh sách Nguyên Vật Liệu</h5>
                                     <div className="d-flex gap-2">
@@ -837,7 +850,6 @@ function Products() {
                                     </div>
                                 </div>
 
-                                {/* 💡 BẢNG DROPDOWN LỌC NVL */}
                                 {showFilterNVL && (
                                     <div className="card card-body bg-light mb-3 shadow-sm border-warning border-opacity-50 animate__animated animate__fadeIn">
                                         <div className="row g-3">
@@ -876,8 +888,6 @@ function Products() {
                                                 <th>Tên Nguyên vật Liệu</th>
                                                 <th>Đơn Vị Tính</th>
                                                 <th>Giá vốn (Lô đang xuất)</th>
-                                                {/* <th>Thuộc loại kích cỡ</th> */}
-                                                {/* 💡 ĐỔI TÊN CỘT BÊN BẢNG NVL */}
                                                 <th>Tồn Kho (Vị trí)</th>
                                                 <th className="text-center">Thao Tác</th>
                                             </tr>
@@ -892,9 +902,7 @@ function Products() {
                                                             <td data-label="Tên Nguyên vật Liệu" className="fw-bold">{p.name} <div className="text-muted small">ID: {p.id}</div></td>
                                                             <td data-label="Đơn Vị Tính"><span className="badge bg-secondary">{p.unit}</span></td>
                                                             <td data-label="Giá vốn (Lô đang xuất)" className="text-muted fw-bold">{formatMoney(p.cost_price)}</td>
-                                                            {/* <td data-label className="text-info fw-bold">{p.size_group}</td> */}
 
-                                                            {/* 💡 HIỂN THỊ KHO VÀ ĐỊNH DẠNG LẠI SỐ LƯỢNG (NVL) */}
                                                             <td data-label="Tồn Kho (Vị trí)">
                                                                 <div className="fw-bold fs-5 text-primary">{formatNumber(p.quantity)}</div>
                                                                 <div className="text-muted small fw-bold">
@@ -922,7 +930,6 @@ function Products() {
                                                                 )}
                                                             </td>
                                                         </tr>
-                                                        {/* BẢNG XỔ XUỐNG BÊN DƯỚI DÒNG SẢN PHẨM NVL */}
                                                         {expandedRows.includes(p.id) && (
                                                             <tr className="table-light">
                                                                 <td colSpan="6" className="p-0 border-bottom border-info border-3">

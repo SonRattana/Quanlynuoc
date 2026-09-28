@@ -6,7 +6,7 @@ import api from "../src/utils/axios";
 function BomSetup() {
     const [toast, setToast] = useState(null);
     const [products, setProducts] = useState([]);     // Danh sách nước thành phẩm
-
+    const [allMaterialsDb, setAllMaterialsDb] = useState([]);
     const [allowedMaterials, setAllowedMaterials] = useState([]);
 
     const [selectedProductId, setSelectedProductId] = useState("");
@@ -19,8 +19,21 @@ function BomSetup() {
     useEffect(() => {
         const fetchInitialData = async () => {
             try {
-                const prodRes = await api.get("api/bom/products", { headers: { Authorization: `Bearer ${token}` } });
+                // 💡 ĐÃ SỬA: Gọi đồng thời 2 API để lấy trọn kho 
+                const [prodRes, allMatsRes] = await Promise.all([
+                    api.get("api/bom/products", { headers: { Authorization: `Bearer ${token}` } }),
+                    api.get("api/products?limit=1000", { headers: { Authorization: `Bearer ${token}` } }) // Lấy toàn kho
+                ]);
+
                 setProducts(prodRes.data);
+
+                // Lọc riêng rổ Nguyên vật liệu từ toàn kho
+                const fullMaterials = (allMatsRes.data.data || allMatsRes.data).filter(p => p.item_type === 'nguyen_lieu');
+
+                // 💡 LƯU KHO BÁU NÀY VÀO TRONG MÁY
+                // (Sếp nhớ kéo lên đầu file, khai báo thêm state này: const [allMaterialsDb, setAllMaterialsDb] = useState([]); )
+                setAllMaterialsDb(fullMaterials);
+
             } catch (error) {
                 console.error("Lỗi tải dữ liệu BOM:", error);
                 setToast({ message: "Lỗi tải dữ liệu từ máy chủ", type: "danger" });
@@ -40,19 +53,34 @@ function BomSetup() {
         const fetchDataForProduct = async () => {
             setIsLoading(true);
             try {
-                const [formulaRes, materialsRes] = await Promise.all([
-                    api.get(`api/bom/${selectedProductId}`, { headers: { Authorization: `Bearer ${token}` } }),
-                    api.get(`api/bom/materials-for/${selectedProductId}`, { headers: { Authorization: `Bearer ${token}` } })
-                ]);
+                // Chỉ cần gọi API lấy công thức thôi, không thèm xài materials-for nữa!
+                const formulaRes = await api.get(`api/bom/${selectedProductId}`, { headers: { Authorization: `Bearer ${token}` } });
 
-                // 💡 ĐÃ FIX FE: Quét qua danh sách và ép quantity thành Number để gọt sạch đuôi ,000
                 const cleanFormula = (formulaRes.data || []).map(item => ({
                     ...item,
                     quantity: Number(item.quantity)
                 }));
-
                 setFormula(cleanFormula);
-                setAllowedMaterials(materialsRes.data || []);
+
+                // 💡 BỘ LỌC THÔNG MINH BẰNG FRONTEND:
+                // Tìm ra dung tích của cái chai đang chọn
+                const currentProd = products.find(p => String(p.id) === String(selectedProductId));
+                const currentVol = currentProd ? (currentProd.volume >= 1000 ? `${currentProd.volume / 1000}L` : `${currentProd.volume}ml`) : "";
+
+                // Lấy rổ chứa toàn bộ vật tư ra mà tự lọc
+                const smartFilteredMaterials = allMaterialsDb.filter(m => {
+                    const sg = String(m.size_group || "").toLowerCase();
+                    // Nếu là "Dùng chung" hoặc "Cụm nhỏ" (cum_nho)
+                    if (sg === "chung" || sg === "cum_nho") return true;
+                    // Hoặc tên nhóm kích cỡ có chứa chữ 250ml
+                    if (sg.includes(currentVol.toLowerCase())) return true;
+                    // Hoặc tên vật tư có chứa chữ 250ml
+                    if (String(m.name).toLowerCase().includes(currentVol.toLowerCase())) return true;
+                    return false;
+                });
+
+                setAllowedMaterials(smartFilteredMaterials);
+
             } catch (error) {
                 setToast({ message: "Lỗi tải dữ liệu chi tiết sản phẩm", type: "danger" });
             } finally {
@@ -172,15 +200,23 @@ function BomSetup() {
                                                             <select
                                                                 className="form-select fw-bold text-primary border-primary"
                                                                 value={item.material_id}
-                                                                // 👇 ĐÃ FIX FE: Giữ lại chuỗi rỗng nếu chọn dòng trắng, tránh biến thành 0
                                                                 onChange={(e) => handleRowChange(index, "material_id", e.target.value ? Number(e.target.value) : "")}
                                                             >
-                                                                <option value="">-- Chọn vật tư (Đã lọc theo kích cỡ) --</option>
-                                                                {allowedMaterials.map(m => (
-                                                                    <option key={m.id} value={m.id}>
-                                                                        {m.name} (Tồn theo: {m.unit})
-                                                                    </option>
-                                                                ))}
+                                                                <option value="" disabled>-- Chọn vật tư (Đã lọc theo kích cỡ) --</option>
+                                                                {allowedMaterials.map(m => {
+                                                                    // 💡 LOGIC CHỐNG TRÙNG LẶP: Quét xem vật tư này đã nằm ở dòng KHÁC chưa
+                                                                    const isSelectedElsewhere = formula.some((row, rowIndex) => rowIndex !== index && row.material_id === m.id);
+
+                                                                    return (
+                                                                        <option
+                                                                            key={m.id}
+                                                                            value={m.id}
+                                                                            disabled={isSelectedElsewhere} // Khóa luôn không cho bấm
+                                                                        >
+                                                                            {m.name} (Tồn theo: {m.unit}) {isSelectedElsewhere ? " ⚠️ (Nguyên vật liệu đã được thêm vào công thức!)" : ""}
+                                                                        </option>
+                                                                    );
+                                                                })}
                                                             </select>
                                                         </td>
 

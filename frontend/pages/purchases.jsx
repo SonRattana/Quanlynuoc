@@ -119,6 +119,11 @@ export default function Purchases() {
         if (items.some(i => i.quantity <= 0)) return setToast({ message: "Số lượng nhập phải lớn hơn 0", type: "warning" });
         if (!form.warehouse_id) return setToast({ message: "Hệ thống chưa nhận diện được Kho Nguyên Vật Liệu. Vui lòng tạo kho trước!", type: "warning" });
 
+        // 💡 ĐÃ FIX: Chặn lưu nếu bỏ trống Mã hóa đơn / Số chứng từ
+        if (!form.invoice_code || form.invoice_code.trim() === "") {
+            return setToast({ message: "Vui lòng nhập Mã hóa đơn / Số chứng từ để đối soát!", type: "warning" });
+        }
+
         try {
             await api.post("api/purchases", {
                 supplier_name: form.supplier_name,
@@ -511,7 +516,15 @@ export default function Purchases() {
 
                                 <div className="mb-3">
                                     <label className="form-label small fw-bold text-dark">Mã hóa đơn / Số chứng từ <span className="text-danger">*</span></label>
-                                    <input type="text" className="form-control border-secondary shadow-sm" placeholder="VD: HD-001234..." value={form.invoice_code} onChange={(e) => setForm({ ...form, invoice_code: e.target.value })} required />
+                                    <input
+                                        type="text"
+                                        className="form-control border-secondary shadow-sm fw-bold text-primary"
+                                        placeholder="VD: HD/001-234|5..."
+                                        value={form.invoice_code}
+                                        autoComplete="off" /* 💡 ĐÃ FIX: Chặn trình duyệt can thiệp */
+                                        onChange={(e) => setForm({ ...form, invoice_code: e.target.value })}
+                                        required
+                                    />
                                 </div>
 
                                 <div className="mb-3">
@@ -634,7 +647,7 @@ export default function Purchases() {
                                                         <td className="fw-bold">
                                                             {/* TÊN NGUYÊN VẬT LIỆU */}
                                                             <div className="text-dark fs-6">{b.name}</div>
-                                                            
+
                                                             {/* 💡 HIỂN THỊ TÊN NHÀ CUNG CẤP Ở ĐÂY */}
                                                             {b.supplier_name && (
                                                                 <div className="text-secondary mt-1" style={{ fontSize: '12px', fontWeight: '600' }}>
@@ -647,11 +660,11 @@ export default function Purchases() {
                                                                 <span className="badge bg-info text-dark me-2">
                                                                     PN#{b.po_id}
                                                                 </span>
-                                                                <br/>
+                                                                <br />
                                                                 <div className="text-dark me-2">
                                                                     Ngày nhập: {formatDate(b.created_at)}
                                                                 </div>
-                                                                
+
                                                                 {b.invoice_code && (
                                                                     <div className="text-primary mt-1 fw-bold" style={{ fontSize: '14px' }}>
                                                                         <i className="fa fa-file-invoice me-1"></i>HĐ: {b.invoice_code}

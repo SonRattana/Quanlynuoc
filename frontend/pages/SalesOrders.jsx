@@ -24,6 +24,8 @@ export default function SalesOrders() {
     const [selectedOrder, setSelectedOrder] = useState(null);
     const [editingId, setEditingId] = useState(null);
     const [searchTerm, setSearchTerm] = useState("");
+    // 💡 ĐÃ FIX: Thêm state để lưu từ khóa gõ tìm khách hàng
+    const [customerSearch, setCustomerSearch] = useState("");
 
     const token = localStorage.getItem("token");
     const userStr = localStorage.getItem("user");
@@ -46,8 +48,35 @@ export default function SalesOrders() {
         try {
             const res = await api.get(`api/sales-orders/${order.id}`, { headers: { Authorization: `Bearer ${token}` } });
             const orderData = res.data;
-            setForm({ customer_id: orderData.customer_id || "", customer_name: orderData.customer_name || "", customer_phone: orderData.customer_phone || "", customer_address: orderData.customer_address || "", shipper_name: orderData.shipper_name || "", note: orderData.note || "", delivery_fee: orderData.delivery_fee ? Number(orderData.delivery_fee) : "", advance_payment: orderData.advance_payment ? Number(orderData.advance_payment) : "" });
-            const mappedItems = orderData.details.map(d => ({ product_id: d.product_id, name: d.product_name, unit: d.unit, unit_price: d.unit_price, quantity: d.ordered_quantity }));
+            // 💡 ĐÃ FIX: Thêm thuộc tính customer_email vào form để nó fill lên ô input
+            setForm({
+                customer_id: orderData.customer_id || "",
+                customer_name: orderData.customer_name || "",
+                customer_phone: orderData.customer_phone || "",
+                customer_address: orderData.customer_address || "",
+                customer_email: orderData.customer_email || "",
+                shipper_name: orderData.shipper_name || "",
+                note: orderData.note || "",
+                delivery_fee: orderData.delivery_fee ? Number(orderData.delivery_fee) : "",
+                advance_payment: orderData.advance_payment ? Number(orderData.advance_payment) : ""
+            });
+            // 💡 ĐÃ FIX: Bổ sung logic móc giá cọc và mặc định Đổi vỏ = Số lượng mua
+            const mappedItems = orderData.details.map(d => {
+                const prod = products.find(p => p.id === d.product_id);
+                const reqDeposit = prod ? prod.requires_deposit : 0;
+
+                return {
+                    product_id: d.product_id,
+                    name: d.product_name,
+                    unit: d.unit,
+                    unit_price: d.unit_price,
+                    quantity: d.ordered_quantity,
+                    deposit_price: prod ? prod.deposit_price : 0,
+                    requires_deposit: reqDeposit,
+                    // 💡 ĐÃ FIX: Chỉ gán số lượng đổi vỏ bằng số mua nếu là bình có cọc
+                    returned_bottles: reqDeposit === 1 ? d.ordered_quantity : 0
+                };
+            });
             setItems(mappedItems); setEditingId(order.id); setShowModal(true);
         } catch (error) { setToast({ message: "Lỗi tải dữ liệu!", type: "danger" }); }
     };
@@ -76,12 +105,37 @@ export default function SalesOrders() {
         if (!selectedProduct) return;
         const product = products.find(p => p.id === Number(selectedProduct));
         if (items.find(i => i.product_id === product.id)) return setToast({ message: "Đã có trong đơn!", type: "warning" });
-        setItems([...items, { product_id: product.id, name: product.name, unit: product.unit, unit_price: product.sell_price, deposit_price: product.deposit_price || 0, requires_deposit: product.requires_deposit || 0, quantity: 1, returned_bottles: 0 }]); setSelectedProduct("");
+
+        const reqDeposit = product.requires_deposit || 0;
+
+        setItems([...items, {
+            product_id: product.id,
+            name: product.name,
+            unit: product.unit,
+            unit_price: product.sell_price,
+            deposit_price: product.deposit_price || 0,
+            requires_deposit: reqDeposit,
+            quantity: 1,
+            // 💡 ĐÃ FIX: Chỉ mặc định hứa trả = 1 nếu sản phẩm ĐÓ LÀ BÌNH CẦN ĐỔI VỎ
+            returned_bottles: reqDeposit === 1 ? 1 : 0
+        }]);
+        setSelectedProduct("");
     };
 
     const handleReturnedChange = (index, val) => { const newItems = [...items]; newItems[index].returned_bottles = Number(val); setItems(newItems); };
     const handleRemoveItem = (index) => setItems(items.filter((_, i) => i !== index));
-    const handleQuantityChange = (index, val) => { const newItems = [...items]; newItems[index].quantity = Number(val); setItems(newItems); };
+    const handleQuantityChange = (index, val) => {
+        const newItems = [...items];
+        const newQty = Number(val);
+        newItems[index].quantity = newQty;
+
+        // 💡 ĐÃ FIX: Tự động đồng bộ ô Đổi vỏ NẾU SẢN PHẨM ĐÓ LÀ BÌNH (requires_deposit === 1)
+        if (newItems[index].requires_deposit === 1) {
+            newItems[index].returned_bottles = newQty;
+        }
+
+        setItems(newItems);
+    };
 
     const totalGoodsValue = items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
     const expectedDeposit = items.reduce((sum, item) => { if (item.requires_deposit === 1) { const missing = Math.max(0, item.quantity - (item.returned_bottles || 0)); return sum + (missing * item.deposit_price); } return sum; }, 0);
@@ -199,8 +253,9 @@ export default function SalesOrders() {
                                                     {o.status === 'cho_duyet' && (userRole === 'admin' || userRole === 'sanxuat') && <button className="btn btn-sm btn-outline-success" title="Duyệt đơn hàng" onClick={() => handleApprove(o.id)}><i className="fa fa-check"></i></button>}
                                                     <button className="btn btn-sm btn-outline-info" title="Xem chi tiết" onClick={() => handleViewDetails(o.id)}><i className="fa fa-eye"></i></button>
                                                     {o.status !== 'cho_duyet' && <button className="btn btn-sm btn-outline-dark" title="In đơn hàng" onClick={() => setPrintOrderId(o.id)}><i className="fa fa-print"></i></button>}
-                                                    {(o.status === 'cho_san_xuat' || o.status === 'dang_san_xuat') && <button className="btn btn-sm btn-purple text-white" style={{ backgroundColor: '#6f42c1' }} title="Chốt xuất đơn hàng" onClick={() => handleOpenDeliver(o)}><i className="fa fa-truck"></i></button>}
-                                                    {(o.status === 'cho_duyet' || o.status === 'cho_san_xuat') && <><button className="btn btn-sm btn-outline-warning" title="Sửa đơn hàng" onClick={() => handleEdit(o)}><i className="fa fa-edit"></i></button><button className="btn btn-sm btn-outline-danger" title="Xóa đơn hàng" onClick={() => handleDelete(o.id)}><i className="fa fa-trash"></i></button></>}
+                                                    {/* 💡 ĐÃ FIX: Chặn hiển thị nút chốt xuất đơn đối với kế toán và sale */}
+                                                    {(o.status === 'cho_san_xuat' || o.status === 'dang_san_xuat') && !['ketoan', 'nhanvien'].includes(userRole) && <button className="btn btn-sm btn-purple text-white" style={{ backgroundColor: '#6f42c1' }} title="Chốt xuất đơn hàng" onClick={() => handleOpenDeliver(o)}><i className="fa fa-truck"></i></button>}
+                                                    {(o.status === 'cho_duyet' || o.status === 'cho_san_xuat') && ['admin', 'nhanvien'].includes(userRole) && <><button className="btn btn-sm btn-outline-warning" title="Sửa đơn hàng" onClick={() => handleEdit(o)}><i className="fa fa-edit"></i></button><button className="btn btn-sm btn-outline-danger" title="Xóa đơn hàng" onClick={() => handleDelete(o.id)}><i className="fa fa-trash"></i></button></>}
                                                 </div>
                                             </td>
                                         </tr>
@@ -253,9 +308,10 @@ export default function SalesOrders() {
 
                                         {o.status !== 'cho_duyet' && <button className="btn btn-dark rounded-3" onClick={() => setPrintOrderId(o.id)}><i className="fa fa-print"></i></button>}
 
-                                        {(o.status === 'cho_san_xuat' || o.status === 'dang_san_xuat') && <button className="btn text-white rounded-3 w-100 mt-1 fw-bold py-2" style={{ backgroundColor: '#6f42c1' }} onClick={() => handleOpenDeliver(o)}><i className="fa fa-truck me-2"></i> CHỐT GIAO HÀNG</button>}
+                                        {/* 💡 ĐÃ FIX: Chặn hiển thị nút trên giao diện điện thoại */}
+                                        {(o.status === 'cho_san_xuat' || o.status === 'dang_san_xuat') && !['ketoan', 'nhanvien'].includes(userRole) && <button className="btn text-white rounded-3 w-100 mt-1 fw-bold py-2" style={{ backgroundColor: '#6f42c1' }} onClick={() => handleOpenDeliver(o)}><i className="fa fa-truck me-2"></i> CHỐT GIAO HÀNG</button>}
 
-                                        {(o.status === 'cho_duyet' || o.status === 'cho_san_xuat') && (
+                                        {(o.status === 'cho_duyet' || o.status === 'cho_san_xuat') && ['admin', 'nhanvien'].includes(userRole) && (
                                             <div className="d-flex gap-2 w-100 mt-1">
                                                 <button className="btn btn-outline-warning rounded-3 flex-grow-1" onClick={() => handleEdit(o)}><i className="fa fa-edit me-1"></i>Sửa</button>
                                                 <button className="btn btn-outline-danger rounded-3 flex-grow-1" onClick={() => handleDelete(o.id)}><i className="fa fa-trash me-1"></i>Xóa</button>
@@ -283,14 +339,44 @@ export default function SalesOrders() {
                                             <div className="card border-0 shadow-sm rounded-4">
                                                 <div className="card-body p-3 p-md-4">
                                                     <h6 className="fw-bold text-primary mb-3 pb-2 border-bottom"><i className="fa fa-info-circle me-2"></i>Giao Hàng</h6>
-                                                    <div className="mb-3"><select className="form-select bg-light" value={form.customer_id} onChange={(e) => {
-                                                        const cId = e.target.value;
-                                                        if (!cId) return setForm({
-                                                            ...form, customer_id: "", customer_name: "", customer_phone: "", customer_address: "", customer_email: "", note: ""
-                                                        });
-                                                        const c = customers.find(x => String(x.id) === cId);
-                                                        setForm({ ...form, customer_id: c.id, customer_name: c.name, customer_phone: c.phone, customer_address: c.address, customer_email: c.email || "" });
-                                                    }}><option value="">-- Khách tự do --</option>{customers.map(c => <option key={c.id} value={c.id}>{c.name} - {c.phone}</option>)}</select></div>
+
+                                                    {/* 💡 ĐÃ FIX: Nâng cấp thành Dropdown có thanh tìm kiếm thông minh */}
+                                                    <div className="mb-3 position-relative">
+                                                        <div className="dropdown">
+                                                            <button className="btn btn-light border w-100 text-start d-flex justify-content-between align-items-center shadow-sm" type="button" data-bs-toggle="dropdown" aria-expanded="false" onClick={() => setCustomerSearch("")}>
+                                                                <span className="text-truncate fw-bold text-primary">
+                                                                    {form.customer_id ? `${form.customer_name} - ${form.customer_phone}` : "-- Khách tự do --"}
+                                                                </span>
+                                                                <i className="fa fa-chevron-down text-muted"></i>
+                                                            </button>
+                                                            <div className="dropdown-menu w-100 p-2 shadow-lg" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                                                                <input
+                                                                    type="text"
+                                                                    className="form-control mb-2 border-primary"
+                                                                    placeholder="🔍 Gõ tên hoặc SĐT để tìm nhanh..."
+                                                                    value={customerSearch}
+                                                                    onChange={(e) => setCustomerSearch(e.target.value)}
+                                                                    onClick={(e) => e.stopPropagation()} // 💡 Cực kỳ quan trọng: Giữ menu không bị tắt khi bấm vào ô gõ tìm kiếm
+                                                                />
+                                                                <button className="dropdown-item text-primary fw-bold border-bottom pb-2 mb-1" type="button" onClick={() => {
+                                                                    setForm({ ...form, customer_id: "", customer_name: "", customer_phone: "", customer_address: "", customer_email: "", note: "" });
+                                                                }}>
+                                                                    -- Khách tự do --
+                                                                </button>
+                                                                {customers
+                                                                    .filter(c => c.name.toLowerCase().includes(customerSearch.toLowerCase()) || (c.phone && c.phone.includes(customerSearch)))
+                                                                    .map(c => (
+                                                                        <button key={c.id} className="dropdown-item py-2" type="button" onClick={() => {
+                                                                            setForm({ ...form, customer_id: c.id, customer_name: c.name, customer_phone: c.phone, customer_address: c.address, customer_email: c.email || "" });
+                                                                        }}>
+                                                                            <span className="fw-bold text-dark">{c.name}</span> <span className="text-muted small">- {c.phone}</span>
+                                                                        </button>
+                                                                    ))
+                                                                }
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
                                                     <div className="mb-2"><input type="text" className="form-control" placeholder="Tên người nhận *" required value={form.customer_name} onChange={e => setForm({ ...form, customer_name: e.target.value })} /></div>
                                                     <div className="mb-2"><input type="tel" className="form-control" maxLength="10" placeholder="SĐT liên hệ *" value={form.customer_phone} onChange={e => setForm({ ...form, customer_phone: e.target.value.replace(/[^0-9]/g, '') })} /></div>
                                                     <div className="mb-2"><textarea className="form-control" rows="2" placeholder="Địa chỉ giao *" value={form.customer_address} onChange={e => setForm({ ...form, customer_address: e.target.value })}></textarea></div>
@@ -302,8 +388,21 @@ export default function SalesOrders() {
                                                     </div>
                                                     <hr className="my-3 text-muted" />
                                                     <div className="mb-2"><input type="text" className="form-control" placeholder="Tên Shipper" value={form.shipper_name} onChange={e => setForm({ ...form, shipper_name: e.target.value })} /></div>
-                                                    <div className="mb-2"><div className="input-group"><span className="input-group-text bg-light text-danger"><i className="fa fa-truck"></i></span><input type="text" pattern="[0-9]*" className="form-control fw-bold text-danger" placeholder="Phí Ship (Thu thêm)" value={form.delivery_fee} onChange={e => setForm({ ...form, delivery_fee: e.target.value.replace(/[^0-9]/g, '') })} /></div></div>
-                                                    <div className="mb-2"><div className="input-group"><span className="input-group-text bg-light text-success"><i className="fa fa-money-bill"></i></span><input type="text" pattern="[0-9]*" className="form-control fw-bold text-success" placeholder="Tiền cọc trước" value={form.advance_payment} onChange={e => setForm({ ...form, advance_payment: e.target.value.replace(/[^0-9]/g, '') })} /></div></div>
+                                                    <div className="mb-2">
+                                                        <div className="input-group">
+                                                            <span className="input-group-text bg-light text-danger"><i className="fa fa-truck"></i></span>
+                                                            {/* 💡 ĐÃ FIX: Thêm || "" vào value để số 0 biến mất, nhường chỗ cho placeholder */}
+                                                            <input type="text" pattern="[0-9]*" className="form-control fw-bold text-danger" placeholder="Phí Ship (Nếu có)" value={form.delivery_fee || ""} onChange={e => setForm({ ...form, delivery_fee: e.target.value.replace(/[^0-9]/g, '') })} />
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="mb-2">
+                                                        <div className="input-group">
+                                                            <span className="input-group-text bg-light text-success"><i className="fa fa-money-bill"></i></span>
+                                                            {/* 💡 ĐÃ FIX: Thêm || "" vào value */}
+                                                            <input type="text" pattern="[0-9]*" className="form-control fw-bold text-success" placeholder="Khách trả tiền trước" value={form.advance_payment || ""} onChange={e => setForm({ ...form, advance_payment: e.target.value.replace(/[^0-9]/g, '') })} />
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -323,7 +422,7 @@ export default function SalesOrders() {
                                                                 <tr>
                                                                     <th style={{ minWidth: '120px' }}>Sản phẩm</th>
                                                                     <th style={{ width: '80px' }}>SL</th>
-                                                                    <th style={{ width: '80px' }}>Hứa trả</th>
+                                                                    <th style={{ width: '80px' }}>Đổi vỏ</th>
                                                                     <th>Xóa</th>
                                                                 </tr>
                                                             </thead>
@@ -344,7 +443,7 @@ export default function SalesOrders() {
 
                                                     <div className="bg-light p-3 p-md-4 rounded-4 mt-3 border">
                                                         <div className="d-flex justify-content-between mb-1 small text-muted"><span>Tiền hàng:</span><span className="fw-bold">{formatMoney(totalGoodsValue)}</span></div>
-                                                        {expectedDeposit > 0 && <div className="d-flex justify-content-between mb-1 small text-warning text-dark"><span>Cọc vỏ:</span><span className="fw-bold">+ {formatMoney(expectedDeposit)}</span></div>}
+                                                        {expectedDeposit > 0 && <div className="d-flex justify-content-between mb-1 small text-warning text-dark"><span>Phí thế chân vỏ bình:</span><span className="fw-bold">+ {formatMoney(expectedDeposit)}</span></div>}
                                                         {deliveryFee > 0 && <div className="d-flex justify-content-between mb-1 small text-info text-dark"><span>Ship:</span><span className="fw-bold">+ {formatMoney(deliveryFee)}</span></div>}
                                                         <hr className="my-2" />
                                                         <div className="d-flex justify-content-between align-items-center"><span className="fw-bold text-dark">TỔNG:</span><span className="fw-bold fs-4 text-danger">{formatMoney(totalOrderValue)}</span></div>
@@ -405,7 +504,7 @@ export default function SalesOrders() {
                                                         <span className="fw-bold text-danger">{formatMoney(selectedOrder.total_payment)}</span>
                                                     </div>
                                                     <div className="d-flex justify-content-between mb-2">
-                                                        <span className="text-muted">Khách đã cọc:</span>
+                                                        <span className="text-muted">Khách trả trước:</span>
                                                         <span className="fw-bold text-success">- {formatMoney(selectedOrder.advance_payment)}</span>
                                                     </div>
                                                     <div className="d-flex justify-content-between mt-3 pt-3 border-top border-2">
@@ -428,7 +527,7 @@ export default function SalesOrders() {
                                                         <tr>
                                                             <th className="ps-3">Sản Phẩm</th>
                                                             <th className="text-center">Số lượng</th>
-                                                            <th style={{ width: '35%' }}>Hàng có sẵn trong kho</th>
+                                                            <th style={{ width: '35%' }}>Tiến độ</th>
                                                             <th style={{ width: '25%' }}>Đã xuất kho giao</th>
                                                         </tr>
                                                     </thead>
@@ -559,7 +658,7 @@ export default function SalesOrders() {
                                                         <tr>
                                                             <th className="text-start ps-4 py-3">Sản phẩm</th>
                                                             <th className="text-danger" title="Khách chờ">Nợ Khách</th>
-                                                            <th className="text-warning text-dark" title="Kho đang có sẵn">Sẵn Kho</th>
+                                                            <th className="text-warning text-dark" title="Kho đang có sẵn">Hàng có sẵn trong kho</th>
                                                             <th style={{ width: '130px' }} className="text-primary">Thực giao</th>
                                                             <th style={{ width: '130px' }} className="text-success">Vỏ thu về</th>
                                                         </tr>
