@@ -114,7 +114,7 @@ router.get('/:id', verifyToken, async (req, res) => {
 // ==========================================
 // 4. CẬP NHẬT ĐƠN HÀNG (SỬA)
 // ==========================================
-router.put('/:id', verifyToken, async (req, res) => {
+router.put('/:id', verifyToken, checkRole('admin', 'nhanvien'), async (req, res) => {
     const orderId = req.params.id;
     const { customer_id, customer_name, customer_phone, customer_address, customer_email, shipper_name, delivery_fee, note, advance_payment, items, bottle_deposit, total_payment } = req.body;
 
@@ -168,7 +168,7 @@ router.put('/:id', verifyToken, async (req, res) => {
 // ==========================================
 // 5. XÓA ĐƠN HÀNG
 // ==========================================
-router.delete('/:id', verifyToken, async (req, res) => {
+router.delete('/:id', verifyToken, checkRole('admin', 'nhanvien'), async (req, res) => {
     const connection = await db.getConnection();
     try {
         await connection.beginTransaction();
@@ -221,7 +221,7 @@ router.put('/approve/:id', verifyToken, checkRole('admin', 'sanxuat'), async (re
 // ==========================================
 // 7. XUẤT KHO & TẠO HÓA ĐƠN GIAO HÀNG TỪ ĐƠN ĐẶT (ERP LOGIC)
 // ==========================================
-router.post('/:id/export-invoice', verifyToken, checkRole('admin', 'sanxuat', 'ketoan'), async (req, res) => {
+router.post('/:id/export-invoice', verifyToken, checkRole('admin', 'sanxuat'), async (req, res) => {
     const orderId = req.params.id;
     const { warehouse_id, delivery_fee, items, shipper_name, customer_email } = req.body;
 
@@ -265,6 +265,7 @@ router.post('/:id/export-invoice', verifyToken, checkRole('admin', 'sanxuat', 'k
         const finalShipper = shipper_name || order.shipper_name || "";
 
         const [invoiceResult] = await connection.query(
+
             `INSERT INTO invoices (total_amount, total_profit, deposit_amount, created_by, customer_id, customer_name, phone, customer_address, shipper_name, delivery_fee, paid_amount, payment_status, note, customer_email) 
              VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'unpaid', ?, ?)`,
             [
@@ -293,6 +294,15 @@ router.post('/:id/export-invoice', verifyToken, checkRole('admin', 'sanxuat', 'k
                 const returnedQty = Number(item.returned_bottles) || 0;
 
                 if (deliverQty > 0) {
+                    // 💡 ĐÃ FIX: Kiểm tra kho trước khi xuất, chặn đứng nếu xuất âm
+                    const [stockCheck] = await connection.query("SELECT quantity FROM products WHERE id = ?", [item.product_id]);
+                    const currentStock = stockCheck[0]?.quantity || 0;
+
+                    if (currentStock < deliverQty) {
+                        throw new Error(`Sản phẩm '${productName}' không đủ tồn kho! Hiện còn ${currentStock}, nhưng yêu cầu xuất ${deliverQty}.`);
+                    }
+
+                    // (Code cũ giữ nguyên)
                     await connection.query(
                         "INSERT INTO invoice_items (invoice_id, product_id, quantity, sell_price, cost_price) VALUES (?, ?, ?, ?, ?)",
                         [invoiceId, item.product_id, deliverQty, item.unit_price, costPrice]

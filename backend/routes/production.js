@@ -58,18 +58,26 @@ router.post("/", verifyToken, async (req, res) => {
             // Nếu không tìm thấy kho nào đủ, mặc định kho 2 hoặc báo lỗi
             const targetWarehouseId = warehouseItems.length > 0 ? warehouseItems[0].warehouse_id : 2;
 
-            // 3. KIỂM TRA TỒN KHO TRƯỚC KHI CHẠY FIFO
+            // 💡 CHỐT CHẶN AN TOÀN SỐ 1: Kiểm tra Tồn Kho Tổng (Bảng products)
+            const [stockCheck] = await connection.query("SELECT name, quantity FROM products WHERE id = ?", [bom.material_id]);
+            const currentStock = stockCheck[0]?.quantity || 0;
+            const materialName = stockCheck[0]?.name || "Vật tư";
+
+            if (currentStock < requiredQty) {
+                throw new Error(`⛔ Lỗi: Nguyên vật liệu '${materialName}' không đủ tồn kho! Hiện còn ${currentStock}, nhưng lệnh sản xuất cần ${requiredQty}.`);
+            }
+
+            // 3. KIỂM TRA TỒN KHO THEO LÔ (Bảng inventory_batches) TRƯỚC KHI CHẠY FIFO
             const [batches] = await connection.query(
                 `SELECT id, quantity_remaining, cost_price FROM inventory_batches 
                  WHERE product_id = ? AND quantity_remaining > 0 
                  ORDER BY created_at ASC FOR UPDATE`, [bom.material_id]
             );
 
-            // 💡 CHỐT CHẶN AN TOÀN: Báo lỗi và dừng ngay lập tức nếu không đủ vật tư
+            // 💡 CHỐT CHẶN AN TOÀN SỐ 2: Kiểm tra tổng các Lô hàng
             const totalAvailable = batches.reduce((sum, b) => sum + Number(b.quantity_remaining), 0);
             if (totalAvailable < requiredQty) {
-                const [mat] = await connection.query("SELECT name FROM products WHERE id = ?", [bom.material_id]);
-                throw new Error(`⛔ Lỗi: Kho không đủ vật tư [${mat[0]?.name}]. Cần dùng ${requiredQty}, nhưng hiện chỉ còn ${totalAvailable}. Vui lòng nhập thêm vật tư!`);
+                throw new Error(`⛔ Lỗi: Hệ thống lô hàng [${materialName}] bị lỗi đồng bộ! Cần dùng ${requiredQty}, nhưng tổng các lô chỉ còn ${totalAvailable}.`);
             }
 
             let remainingToFulfill = requiredQty;
@@ -357,6 +365,7 @@ router.get('/wastage-report', verifyToken, async (req, res) => {
         const query = `
             SELECT 
                 m.name AS material_name,
+                m.unit AS unit, 
                 SUM(b.quantity * ph.quantity) AS standard_qty,
                 SUM(pd.quantity_used) AS used_qty,
                 (SUM(pd.quantity_used) - SUM(b.quantity * ph.quantity)) AS wastage_qty,
@@ -367,7 +376,7 @@ router.get('/wastage-report', verifyToken, async (req, res) => {
             JOIN products m ON pd.material_id = m.id
             JOIN product_bom b ON b.product_id = ph.product_id AND b.material_id = pd.material_id
             WHERE 1=1 ${dateCondition}
-            GROUP BY pd.material_id, m.name, pd.unit_cost
+            GROUP BY pd.material_id, m.name, m.unit, pd.unit_cost
             HAVING wastage_qty > 0
             ORDER BY wastage_cost DESC
         `;

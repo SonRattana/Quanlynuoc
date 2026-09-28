@@ -51,42 +51,59 @@ router.get('/summary', verifyToken, async (req, res) => {
 });
 
 // ==========================================
-// 2. XỬ LÝ TRẢ VỎ (NHẬN DIỆN ĐÚNG LOẠI VỎ & CÓ GHI CHÚ)
+// 2. XỬ LÝ TRẢ VỎ (NHẬN DIỆN ĐÚNG LOẠI VỎ, CÓ GHI CHÚ VÀ TRỪ CỌC NẾU MẤT)
 // ==========================================
 router.post('/return', verifyToken, async (req, res) => {
-    const { customer_id, invoice_id, product_id, return_qty, deposit_price, note } = req.body;
-    const refundAmount = return_qty * deposit_price;
+    // 💡 ĐÃ FIX: Nhận thêm biến lost_qty từ Giao diện
+    const { customer_id, invoice_id, product_id, return_qty, lost_qty, deposit_price, note } = req.body;
+
+    const qtyReturn = Number(return_qty) || 0;
+    const qtyLost = Number(lost_qty) || 0;
+    const totalQty = qtyReturn + qtyLost;
+
+    if (totalQty <= 0) return res.status(400).json({ message: "Số lượng không hợp lệ" });
+
+    const refundAmount = qtyReturn * deposit_price; // Tiền trả lại khách
+    const lostAmount = qtyLost * deposit_price;     // Tiền tịch thu (doanh thu khấu hao)
+    const totalDepositClear = refundAmount + lostAmount;
 
     const connection = await db.getConnection();
     try {
         await connection.beginTransaction();
 
-        // Lưu thông tin trả vỏ có gắn kèm Mã sản phẩm và Ghi chú (Nếu lủng, vỡ...)
-        const [result] = await db.query(
-            `INSERT INTO bottle_deposits (customer_id, invoice_id, product_id, type, quantity, deposit_amount, note) 
-             VALUES (?, ?, ?, 'refund', ?, ?, ?)`,
-            [customer_id, invoice_id, product_id, return_qty, refundAmount, note || '']
-        );
-        
-        const depositRecordId = result.insertId;
+        // 1. Lưu biên bản Trả vỏ nguyên vẹn (Hoàn tiền)
+        if (qtyReturn > 0) {
+            await connection.query(
+                `INSERT INTO bottle_deposits (customer_id, invoice_id, product_id, type, quantity, deposit_amount, note) 
+                 VALUES (?, ?, ?, 'refund', ?, ?, ?)`,
+                [customer_id, invoice_id, product_id, qtyReturn, refundAmount, note || 'Trả vỏ nguyên vẹn']
+            );
+        }
 
+        // 2. Lưu biên bản Khách làm mất vỏ (Tịch thu cọc -> Chuyển thành Loss)
+        if (qtyLost > 0) {
+            await connection.query(
+                `INSERT INTO bottle_deposits (customer_id, invoice_id, product_id, type, quantity, deposit_amount, note) 
+                 VALUES (?, ?, ?, 'loss', ?, ?, ?)`,
+                [customer_id, invoice_id, product_id, qtyLost, lostAmount, note || 'Báo mất / Hư hỏng nặng']
+            );
+        }
+
+        // 3. Trừ công nợ cọc của khách hàng
         if (customer_id) {
             await connection.query(
                 `UPDATE customers SET deposit_balance = GREATEST(0, deposit_balance - ?) WHERE id = ?`,
-                [refundAmount, customer_id]
+                [totalDepositClear, customer_id]
             );
         }
 
         await connection.commit();
-        
-        // 💡 GHI AUDIT LOG THAO TÁC THU VỎ VÀ HOÀN TIỀN
-        const logMsg = note 
-            ? `Thu ${return_qty} vỏ, hoàn ${refundAmount.toLocaleString('vi-VN')}đ. Ghi chú: ${note}` 
-            : `Thu ${return_qty} vỏ bình thường, hoàn ${refundAmount.toLocaleString('vi-VN')}đ`;
-            
-        await logAction(req, "CREATE", "bottle_deposits", depositRecordId, null, req.body, logMsg);
 
-        res.json({ message: `Đã thu về ${return_qty} vỏ và hoàn lại ${refundAmount.toLocaleString('vi-VN')}đ tiền cọc.` });
+        // GHI AUDIT LOG
+        const logMsg = `Thu hồi: ${qtyReturn} vỏ nguyên, Mất: ${qtyLost} vỏ. Hoàn lại ${refundAmount.toLocaleString('vi-VN')}đ. Ghi chú: ${note}`;
+        await logAction(req, "CREATE", "bottle_deposits", null, null, req.body, logMsg);
+
+        res.json({ message: `Đã thu ${qtyReturn} vỏ, mất ${qtyLost} vỏ. Hoàn lại ${refundAmount.toLocaleString('vi-VN')}đ tiền cọc.` });
 
     } catch (error) {
         await connection.rollback();

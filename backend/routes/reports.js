@@ -83,6 +83,34 @@ router.get('/pnl', verifyToken, async (req, res) => {
     }
 });
 
+// API: Lấy báo cáo hao hụt vật tư
+// router.get('/wastage_report', verifyToken, async (req, res) => {
+//     try {
+//         const { startDate, endDate } = req.query;
+//         const startDateTime = `${startDate} 00:00:00`;
+//         const endDateTime = `${endDate} 23:59:59`;
+
+//         const [rows] = await db.query(`
+//             SELECT 
+//                 m.name AS material_name,
+//                 SUM(mr.quantity) AS total_used,
+//                 SUM(mr.standard_quantity) AS standard_qty,
+//                 SUM(mr.wastage_quantity) AS wastage_qty,
+//                 SUM(mr.wastage_cost) AS wastage_cost
+//             FROM material_records mr
+//             JOIN materials m ON mr.material_id = m.id
+//             WHERE mr.record_date >= ? AND mr.record_date <= ?
+//             GROUP BY m.id, m.name
+//             ORDER BY wastage_cost DESC
+//         `, [startDateTime, endDateTime]);
+
+//         res.json(rows || []);
+//     } catch (err) {
+//         console.error("LỖI API BÁO CÁO HAO HỤT:", err.message);
+//         res.status(500).json([]);
+//     }
+// });
+
 // API: Lấy báo cáo doanh thu CHI TIẾT (Sổ chi tiết bán hàng)
 router.get('/revenue', verifyToken, async (req, res) => {
     try {

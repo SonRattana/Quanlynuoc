@@ -25,12 +25,12 @@ router.get("/", verifyToken, async (req, res) => {
       SELECT 
         p.id, p.name, p.volume, p.unit, p.cost_price, p.sell_price, 
         p.deposit_price, p.image, p.wholesale_price, p.wholesale_min_quantity, 
-        p.requires_deposit, p.item_type, p.size_group,
+        p.requires_deposit, p.item_type, p.size_group, p.min_stock, /* 💡 ĐÃ THÊM min_stock */
         IFNULL(wp.quantity, 0) AS quantity,
-        IFNULL(w.name, 'Kho Tổng') AS warehouse_name /* 💡 ĐIỂM ĂN TIỀN 1: Lấy tên kho */
+        IFNULL(w.name, 'Kho Tổng') AS warehouse_name
       FROM products p
       LEFT JOIN warehouse_products wp ON p.id = wp.product_id ${warehouse_id ? 'AND wp.warehouse_id = ?' : ''}
-      LEFT JOIN warehouses w ON wp.warehouse_id = w.id /* 💡 ĐIỂM ĂN TIỀN 2: Kết nối với bảng kho */
+      LEFT JOIN warehouses w ON wp.warehouse_id = w.id
       WHERE p.is_active = 1
     `;
 
@@ -89,8 +89,8 @@ router.get("/:id/batches", async (req, res) => {
 // ================= ADD PRODUCT =================
 router.post("/", verifyToken, upload.single('image'), async (req, res) => {
   try {
-    // 💡 BỔ SUNG: Nhận giá sỉ và mốc số lượng từ giao diện
-    const { name, volume, unit, cost_price, sell_price, deposit_price, item_type, size_group, wholesale_price, wholesale_min_quantity, requires_deposit } = req.body;
+    // 💡 ĐÃ THÊM: min_stock
+    const { name, volume, unit, cost_price, sell_price, deposit_price, item_type, size_group, wholesale_price, wholesale_min_quantity, requires_deposit, min_stock } = req.body;
     const imagePath = req.file ? `/uploads/${req.file.filename}` : null;
 
     let volumeNumber = Number(volume);
@@ -99,6 +99,7 @@ router.post("/", verifyToken, upload.single('image'), async (req, res) => {
     let depositPrice = Number(deposit_price ?? 0);
     let wsPrice = Number(wholesale_price ?? 0);
     let wsMinQty = Number(wholesale_min_quantity ?? 0);
+    let minStock = Number(min_stock ?? 0); // 💡 ĐÃ THÊM
 
     if (item_type === 'nguyen_lieu') {
       costPrice = 0; sellPrice = 0; depositPrice = 0; volumeNumber = 1; wsPrice = 0; wsMinQty = 0;
@@ -106,11 +107,11 @@ router.post("/", verifyToken, upload.single('image'), async (req, res) => {
 
     if (!name?.trim()) return res.status(400).json({ message: "Tên sản phẩm bắt buộc" });
 
-    // 💡 BỔ SUNG: Đẩy vào Database
+    // 💡 ĐÃ THÊM: Lưu min_stock vào DB
     const [result] = await db.query(
-      `INSERT INTO products (name, volume, unit, cost_price, sell_price, deposit_price, image, item_type, size_group, wholesale_price, wholesale_min_quantity, requires_deposit)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [name.trim(), volumeNumber, unit, costPrice, sellPrice, depositPrice, imagePath, item_type || 'thanh_pham', size_group, wsPrice, wsMinQty, Number(requires_deposit) === 1 ? 1 : 0]
+      `INSERT INTO products (name, volume, unit, cost_price, sell_price, deposit_price, image, item_type, size_group, wholesale_price, wholesale_min_quantity, requires_deposit, min_stock)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [name.trim(), volumeNumber, unit, costPrice, sellPrice, depositPrice, imagePath, item_type || 'thanh_pham', size_group, wsPrice, wsMinQty, Number(requires_deposit) === 1 ? 1 : 0, minStock]
     );
 
     await logAction(req, "CREATE", "products", result.insertId, null, req.body, `Thêm sản phẩm mới: ${name}`);
@@ -129,8 +130,8 @@ router.put("/:id", verifyToken, upload.single('image'), async (req, res) => {
     const [oldRows] = await db.query("SELECT * FROM products WHERE id = ?", [id]);
     if (oldRows.length === 0) return res.status(404).json({ message: "Không thấy sản phẩm" });
 
-    // 💡 BỔ SUNG: Nhận giá sỉ và mốc số lượng từ giao diện
-    const { name, volume, unit, cost_price, sell_price, deposit_price, item_type, size_group, wholesale_price, wholesale_min_quantity, requires_deposit } = req.body;
+    // 💡 ĐÃ THÊM: min_stock
+    const { name, volume, unit, cost_price, sell_price, deposit_price, item_type, size_group, wholesale_price, wholesale_min_quantity, requires_deposit, min_stock } = req.body;
     const newImagePath = req.file ? `/uploads/${req.file.filename}` : null;
 
     let volumeNumber = Number(volume);
@@ -139,14 +140,15 @@ router.put("/:id", verifyToken, upload.single('image'), async (req, res) => {
     let depositPrice = Number(deposit_price ?? 0);
     let wsPrice = Number(wholesale_price ?? 0);
     let wsMinQty = Number(wholesale_min_quantity ?? 0);
+    let minStock = Number(min_stock ?? 0); // 💡 ĐÃ THÊM
 
     if (item_type === 'nguyen_lieu') {
       costPrice = 0; sellPrice = 0; depositPrice = 0; volumeNumber = 1; wsPrice = 0; wsMinQty = 0;
     }
 
-    // 💡 BỔ SUNG: Cập nhật vào Database
-    let query = `UPDATE products SET name=?, volume=?, unit=?, cost_price=?, sell_price=?, deposit_price=?, item_type=?, size_group=?, wholesale_price=?, wholesale_min_quantity=?, requires_deposit=?`;
-    let params = [name, volumeNumber, unit, costPrice, sellPrice, depositPrice, item_type || 'thanh_pham', size_group, wsPrice, wsMinQty, Number(requires_deposit) === 1 ? 1 : 0];
+    // 💡 ĐÃ THÊM: Cập nhật min_stock
+    let query = `UPDATE products SET name=?, volume=?, unit=?, cost_price=?, sell_price=?, deposit_price=?, item_type=?, size_group=?, wholesale_price=?, wholesale_min_quantity=?, requires_deposit=?, min_stock=?`;
+    let params = [name, volumeNumber, unit, costPrice, sellPrice, depositPrice, item_type || 'thanh_pham', size_group, wsPrice, wsMinQty, Number(requires_deposit) === 1 ? 1 : 0, minStock];
 
     if (newImagePath) {
       query += `, image=?`;

@@ -26,6 +26,11 @@ router.post("/", verifyToken, async (req, res) => {
 
         if (!items || items.length === 0) return res.status(400).json({ message: "Chưa chọn hàng hóa nào!" });
 
+        // 💡 ĐÃ FIX: Chặn đứng ở phía Server nếu cố tình bypass Frontend
+        if (!invoice_code || invoice_code.trim() === "") {
+            return res.status(400).json({ message: "Bắt buộc phải nhập Mã hóa đơn / Số chứng từ để đối soát!" });
+        }
+
         // 💡 GÁN CỨNG: Tự động tìm ID của "Kho Nguyên Vật Liệu"
         const [whRows] = await connection.query("SELECT id FROM warehouses WHERE name LIKE ? LIMIT 1", ['%Nguyên Vật Liệu%']);
         if (whRows.length === 0) {
@@ -190,8 +195,8 @@ router.put("/update/:id", verifyToken, async (req, res) => {
              SET supplier_name=?, invoice_code=?, total_payment=?, note=?,
                  total_goods_amount=?, total_fee_amount=?, vat_rate=?, vat_amount=? 
              WHERE id=?`,
-            [supplier_name, invoice_code, total_payment, note, 
-             total_goods_amount, fee, rate, vat_amount, id]
+            [supplier_name, invoice_code, total_payment, note,
+                total_goods_amount, fee, rate, vat_amount, id]
         );
 
         // Xóa chi tiết cũ
@@ -210,7 +215,7 @@ router.put("/update/:id", verifyToken, async (req, res) => {
                 allocatedFeePerUnit = totalFeeForItem / qty;
             }
             const vatPerUnit = price * (rate / 100);
-            
+
             // 💡 ĐÂY LÀ GIÁ VỐN MỚI CHUẨN XÁC SAU KHI SỬA
             const finalCostPrice = price + allocatedFeePerUnit + vatPerUnit;
 
@@ -241,8 +246,8 @@ router.put("/update/:id", verifyToken, async (req, res) => {
         await connection.rollback();
         console.error("Lỗi cập nhật phiếu nhập:", err);
         res.status(500).json({ message: err.message });
-    } finally { 
-        connection.release(); 
+    } finally {
+        connection.release();
     }
 });
 
