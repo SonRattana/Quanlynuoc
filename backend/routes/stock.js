@@ -79,7 +79,7 @@ router.get("/", verifyToken, async (req, res) => {
         const [rows] = await db.query(
             `SELECT 
                 st.id, st.type, st.quantity, st.reason, 
-                CONCAT(DATE_FORMAT(st.created_at, '%Y-%m-%dT%H:%i:%s'), 'Z') as created_at,
+                CONCAT(DATE_FORMAT(st.created_at, '%Y-%m-%dT%H:%i:%s')) as created_at,
                 p.name AS product_name, p.unit,
                 w1.name AS warehouse_name,
                 w2.name AS target_warehouse_name,

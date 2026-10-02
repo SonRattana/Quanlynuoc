@@ -236,6 +236,39 @@ router.post("/cost-configs", verifyToken, async (req, res) => {
     }
 });
 
+// ================= API: TỰ ĐỘNG QUÉT CHI PHÍ HAO MÒN (VỎ BÌNH) TỪ TAB 3 =================
+router.get("/auto-overhead-costs", verifyToken, async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+
+        if (!startDate || !endDate) {
+            return res.status(400).json({ message: "Thiếu ngày bắt đầu và ngày kết thúc" });
+        }
+
+        // Quét bảng stock_transactions để tìm các phiếu "Xuất Hủy/Chuyển đi"
+        // Lưu ý: Chữ 'manual_export' sếp tự sửa lại cho đúng với cái value mà sếp đang lưu xuống DB lúc làm phiếu ở Tab 3 nhé!
+        const query = `
+            SELECT 
+                IFNULL(SUM(st.quantity * p.cost_price), 0) AS total_depreciation
+            FROM stock_transactions st
+            JOIN products p ON st.product_id = p.id
+            WHERE DATE(st.created_at) BETWEEN ? AND ?
+            AND st.type = 'export' 
+            AND st.transaction_type = 'damaged' 
+        `;
+
+        const [result] = await db.query(query, [startDate, endDate]);
+
+        res.json({
+            total_depreciation: result[0].total_depreciation
+        });
+
+    } catch (err) {
+        console.error("Lỗi lấy tổng hao mòn tự động:", err);
+        res.status(500).json({ message: "Lỗi hệ thống khi quét dữ liệu hao mòn." });
+    }
+});
+
 // ================= API: CHỐT GIÁ VỐN THEO KỲ (TUẦN / THÁNG) =================
 router.post("/monthly-costing", verifyToken, async (req, res) => {
     const connection = await db.getConnection();
@@ -324,11 +357,11 @@ router.post("/monthly-costing", verifyToken, async (req, res) => {
         // Cập nhật lại tổng lợi nhuận của toàn bộ hóa đơn
         await connection.query(
             `UPDATE invoices i
-             SET i.total_profit = (
+             SET i.total_profit = IFNULL((
                  SELECT SUM((sell_price - cost_price) * quantity) 
                  FROM invoice_items 
                  WHERE invoice_id = i.id
-             )
+             ), 0)
              WHERE DATE(i.created_at) BETWEEN ? AND ?`,
             [start_date, end_date]
         );

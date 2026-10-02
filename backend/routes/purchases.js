@@ -167,7 +167,7 @@ router.get("/details/:id", verifyToken, async (req, res) => {
         res.status(500).json({ message: "Lỗi server" });
     }
 });
-// API: Cập nhật phiếu nhập (PHIÊN BẢN CHUẨN LOGIC ERP - CẬP NHẬT CẢ GIÁ VỐN)
+// API: Cập nhật phiếu nhập (BẢN CHỐNG LỖI KHI NHẬP GIÁ 0đ)
 router.put("/update/:id", verifyToken, async (req, res) => {
     const connection = await db.getConnection();
     try {
@@ -176,7 +176,13 @@ router.put("/update/:id", verifyToken, async (req, res) => {
 
         await connection.beginTransaction();
 
-        // 1. TÍNH TOÁN LẠI TỔNG TIỀN PHIẾU NHẬP
+        // 1. LẤY SỐ LƯỢNG CŨ TRƯỚC KHI XÓA
+        const [oldDetails] = await connection.query(
+            "SELECT product_id, quantity FROM purchase_order_details WHERE purchase_order_id = ?",
+            [id]
+        );
+
+        // TÍNH TOÁN LẠI TIỀN HÀNG
         let total_goods_amount = 0;
         if (details && details.length > 0) {
             details.forEach(item => {
@@ -189,62 +195,83 @@ router.put("/update/:id", verifyToken, async (req, res) => {
         const vat_amount = (total_goods_amount * rate) / 100;
         const total_payment = total_goods_amount + fee + vat_amount;
 
-        // 2. CẬP NHẬT GIẤY TỜ (BẢNG PHIẾU NHẬP)
+        // CẬP NHẬT PHIẾU NHẬP
         await connection.query(
             `UPDATE purchase_orders 
              SET supplier_name=?, invoice_code=?, total_payment=?, note=?,
                  total_goods_amount=?, total_fee_amount=?, vat_rate=?, vat_amount=? 
              WHERE id=?`,
-            [supplier_name, invoice_code, total_payment, note,
-                total_goods_amount, fee, rate, vat_amount, id]
+            [supplier_name, invoice_code, total_payment, note, total_goods_amount, fee, rate, vat_amount, id]
         );
 
         // Xóa chi tiết cũ
         await connection.query("DELETE FROM purchase_order_details WHERE purchase_order_id = ?", [id]);
 
-        // 3. TÍNH TOÁN & CẬP NHẬT LẠI GIÁ VỐN CHO TỪNG SẢN PHẨM
+        // Lấy ID kho Nguyên Vật Liệu
+        const [whRows] = await connection.query("SELECT id FROM warehouses WHERE name LIKE ? LIMIT 1", ['%Nguyên Vật Liệu%']);
+        const targetWarehouseId = whRows.length > 0 ? whRows[0].id : null;
+
+        // 2. TÍNH CHÊNH LỆCH VÀ CỘNG TRỪ VÀO KHO
         for (const item of details) {
-            const qty = Number(item.quantity_used);
+            const newQty = Number(item.quantity_used);
             const price = Number(item.unit_cost);
 
-            // Băm lại phí Ship và Thuế VAT cho từng món
+            // Ép kiểu Number để chống lỗi không tìm thấy ID
+            const oldItem = oldDetails.find(old => Number(old.product_id) === Number(item.material_id));
+            const oldQty = oldItem ? Number(oldItem.quantity) : 0;
+            const quantityDifference = newQty - oldQty;
+
             let allocatedFeePerUnit = 0;
             if (total_goods_amount > 0 && fee > 0) {
-                const itemValueRatio = (qty * price) / total_goods_amount;
-                const totalFeeForItem = fee * itemValueRatio;
-                allocatedFeePerUnit = totalFeeForItem / qty;
+                allocatedFeePerUnit = (fee * ((newQty * price) / total_goods_amount)) / newQty;
             }
             const vatPerUnit = price * (rate / 100);
-
-            // 💡 ĐÂY LÀ GIÁ VỐN MỚI CHUẨN XÁC SAU KHI SỬA
             const finalCostPrice = price + allocatedFeePerUnit + vatPerUnit;
 
-            // Thêm lại chi tiết phiếu
+            // Chèn chi tiết mới
             await connection.query(
                 "INSERT INTO purchase_order_details (purchase_order_id, product_id, quantity, unit_price) VALUES (?, ?, ?, ?)",
-                [id, item.material_id, qty, price]
+                [id, item.material_id, newQty, price]
             );
 
-            // 💡 QUAN TRỌNG NHẤT: Chui vào kho, cập nhật lại Giá vốn của cái lô hàng nhập đợt đó
+            // Cập nhật Kho Lô (Lưu lô này giá = 0 để sếp biết mà theo dõi)
             await connection.query(
                 `UPDATE inventory_batches 
-                 SET unit_price = ?, allocated_fee = ?, cost_price = ? 
+                 SET quantity_initial = quantity_initial + ?, 
+                     quantity_remaining = quantity_remaining + ?, 
+                     unit_price = ?, allocated_fee = ?, cost_price = ? 
                  WHERE po_id = ? AND product_id = ?`,
-                [price, allocatedFeePerUnit, finalCostPrice, id, item.material_id]
+                [quantityDifference, quantityDifference, price, allocatedFeePerUnit, finalCostPrice, id, item.material_id]
             );
 
-            // 💡 ĐỒNG THỜI: Cập nhật giá vốn mới nhất này ra ngoài Danh mục vật tư
-            await connection.query(
-                `UPDATE products SET cost_price = ? WHERE id = ?`,
-                [finalCostPrice, item.material_id]
-            );
+            // 💡 BẢO VỆ KHO TỔNG: Xử lý thông minh khi Giá = 0
+            if (finalCostPrice > 0) {
+                // Nếu có nhập giá: Cập nhật cả số lượng và đè Giá vốn mới lên
+                await connection.query(
+                    `UPDATE products SET quantity = quantity + ?, cost_price = ? WHERE id = ?`,
+                    [quantityDifference, finalCostPrice, item.material_id]
+                );
+            } else {
+                // Nếu Giá = 0: Chỉ cộng số lượng vào kho, GIỮ NGUYÊN Giá vốn hiện tại của hệ thống!
+                await connection.query(
+                    `UPDATE products SET quantity = quantity + ? WHERE id = ?`,
+                    [quantityDifference, item.material_id]
+                );
+            }
+
+            // Cập nhật Kho Chi Nhánh
+            if (targetWarehouseId) {
+                await connection.query(
+                    "UPDATE warehouse_products SET quantity = quantity + ? WHERE warehouse_id = ? AND product_id = ?",
+                    [quantityDifference, targetWarehouseId, item.material_id]
+                );
+            }
         }
 
         await connection.commit();
-        res.json({ message: "Sửa phiếu và cập nhật lại Giá Vốn toàn hệ thống thành công!" });
+        res.json({ message: "Sửa phiếu và cập nhật Tồn kho thành công!" });
     } catch (err) {
         await connection.rollback();
-        console.error("Lỗi cập nhật phiếu nhập:", err);
         res.status(500).json({ message: err.message });
     } finally {
         connection.release();
