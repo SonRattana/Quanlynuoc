@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import Layout from "../components/layout";
 import Toast from "../components/Toast";
 import api from "../src/utils/axios";
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -194,6 +194,7 @@ export default function Reports() {
         let worksheet;
         let fileName = "";
         let columnWidths = [];
+        let printOrientation = 'portrait'; // 💡 Mặc định in giấy dọc
 
         if (reportType === "pnl") {
             excelData = data.map((item) => ({
@@ -201,10 +202,12 @@ export default function Reports() {
                 "TỔNG GIÁ VỐN": Number(item.total_cogs),
                 "LỢI NHUẬN GỘP": Number(item.gross_profit),
                 "CHI PHÍ HOẠT ĐỘNG": Number(item.total_expenses),
-                "KHẤU HAO / THIỆT HẠI VỎ": Number(item.total_bottle_loss || 0), // 💡 Thêm dòng thiệt hại vỏ vào Excel
+                "KHẤU HAO / THIỆT HẠI VỎ": Number(item.total_bottle_loss || 0),
                 "LỢI NHUẬN RÒNG": Number(item.net_profit)
             }));
-            columnWidths = [{ wpx: 150 }, { wpx: 150 }, { wpx: 150 }, { wpx: 150 }, { wpx: 150 }, { wpx: 150 }];
+            // Ép cột
+            columnWidths = [{ wpx: 130 }, { wpx: 130 }, { wpx: 140 }, { wpx: 130 }, { wpx: 140 }, { wpx: 140 }];
+            printOrientation = 'landscape'; // Đẩy sang in ngang cho thoáng
             worksheet = XLSX.utils.json_to_sheet(excelData);
             fileName = `BaoCao_LaiLo_PNL_${startDate}.xlsx`;
         }
@@ -213,7 +216,7 @@ export default function Reports() {
                 "MÃ HĐ": item.isFirst ? `HD${item.invoice_id}` : "",
                 "NGÀY": item.isFirst ? new Date(item.created_at).toLocaleDateString("vi-VN") : "",
                 "NGƯỜI GIAO": item.isFirst ? (item.shipper_name || "") : "",
-                "KHÁCH HÀNG": item.isFirst ? (item.customer_name || "Khách lẻ") : "",
+                "KHÁCH HÀNG": item.isFirst ? ((item.customer_name || "Khách lẻ") + (item.note ? `\n(${item.note})` : "")) : "",
                 "SĐT": item.isFirst ? (item.phone || "") : "",
                 "ĐỊA CHỈ": item.isFirst ? (item.address || item.customer_address || "") : "",
                 "Hàng hóa": item.product_name,
@@ -225,7 +228,9 @@ export default function Reports() {
                 "Tổng tiền HĐ": item.isFirst ? Number(item.inv_tong_tien || 0) : "",
                 "Chưa trả (Vỏ)": item.isFirst ? Number(item.inv_unreturned || 0) : ""
             }));
-            columnWidths = [{ wpx: 80 }, { wpx: 100 }, { wpx: 120 }, { wpx: 150 }, { wpx: 100 }, { wpx: 200 }, { wpx: 150 }, { wpx: 60 }, { wpx: 80 }, { wpx: 100 }, { wpx: 120 }, { wpx: 120 }, { wpx: 120 }, { wpx: 100 }];
+            // Ép cột siêu hẹp để vừa 1 trang
+            columnWidths = [{ wpx: 55 }, { wpx: 70 }, { wpx: 90 }, { wpx: 120 }, { wpx: 80 }, { wpx: 140 }, { wpx: 120 }, { wpx: 40 }, { wpx: 60 }, { wpx: 70 }, { wpx: 80 }, { wpx: 80 }, { wpx: 80 }, { wpx: 70 }];
+            printOrientation = 'landscape';
             worksheet = XLSX.utils.json_to_sheet(excelData);
 
             const merges = [];
@@ -252,7 +257,7 @@ export default function Reports() {
                 "NGÀY": item.isFirst ? new Date(item.created_at).toLocaleDateString("vi-VN") : "",
                 "MÃ HĐ": item.isFirst ? `HD${item.invoice_id}` : "",
                 "NGƯỜI GIAO": item.isFirst ? (item.shipper_name || "") : "",
-                "KHÁCH HÀNG": item.isFirst ? (item.customer_name || "Khách lẻ") : "",
+                "KHÁCH HÀNG": item.isFirst ? ((item.customer_name || "Khách lẻ") + (item.note ? `\n(${item.note})` : "")) : "",
                 "SĐT": item.isFirst ? (item.phone || "") : "",
                 "ĐỊA CHỈ": item.isFirst ? (item.customer_address || item.address || "") : "",
                 "Hàng hóa": item.product_name,
@@ -263,9 +268,11 @@ export default function Reports() {
                 "Tổng Tiền": item.isFirst ? Number(item.inv_total || 0) : "",
                 "Thực Thu": item.isFirst ? Number(item.inv_paid || 0) : "",
                 "Công Nợ Tiền": item.isFirst ? Number(item.inv_debt || 0) : "",
-                "Nợ Vỏ Thực Tế": item.isFirst ? Number(item.inv_actual_debt || 0) : ""
+                "Nợ Vỏ": item.isFirst ? Number(item.inv_actual_debt || 0) : ""
             }));
-            columnWidths = [{ wpx: 100 }, { wpx: 80 }, { wpx: 120 }, { wpx: 150 }, { wpx: 100 }, { wpx: 200 }, { wpx: 150 }, { wpx: 60 }, { wpx: 100 }, { wpx: 120 }, { wpx: 120 }, { wpx: 120 }, { wpx: 120 }, { wpx: 120 }, { wpx: 100 }];
+            // Ép cột siêu hẹp
+            columnWidths = [{ wpx: 70 }, { wpx: 55 }, { wpx: 90 }, { wpx: 110 }, { wpx: 80 }, { wpx: 140 }, { wpx: 110 }, { wpx: 40 }, { wpx: 60 }, { wpx: 80 }, { wpx: 80 }, { wpx: 80 }, { wpx: 80 }, { wpx: 80 }, { wpx: 50 }];
+            printOrientation = 'landscape';
             worksheet = XLSX.utils.json_to_sheet(excelData);
 
             const merges = [];
@@ -294,10 +301,10 @@ export default function Reports() {
                 "Số lượng bán": Number(item.total_quantity),
                 "Doanh thu (VNĐ)": Number(item.total_revenue)
             }));
-            columnWidths = [{ wpx: 200 }, { wpx: 120 }, { wpx: 100 }, { wpx: 150 }];
+            columnWidths = [{ wpx: 250 }, { wpx: 120 }, { wpx: 120 }, { wpx: 150 }];
+            worksheet = XLSX.utils.json_to_sheet(excelData);
             const totalQty = data.reduce((sum, item) => sum + Number(item.total_quantity), 0);
             const totalRev = data.reduce((sum, item) => sum + Number(item.total_revenue), 0);
-            worksheet = XLSX.utils.json_to_sheet(excelData);
             XLSX.utils.sheet_add_aoa(worksheet, [["TỔNG BÁN RA:", "", totalQty, totalRev]], { origin: -1 });
             worksheet['!merges'] = [{ s: { r: data.length + 1, c: 0 }, e: { r: data.length + 1, c: 1 } }];
             fileName = `BaoCao_DoanhThu_TheoSP_${startDate}.xlsx`;
@@ -309,11 +316,11 @@ export default function Reports() {
                 "Số Lượng SP Bán Ra": Number(item.total_products_sold),
                 "Tổng Doanh Thu (VNĐ)": Number(item.total_revenue)
             }));
-            columnWidths = [{ wpx: 300 }, { wpx: 100 }, { wpx: 150 }, { wpx: 150 }];
+            columnWidths = [{ wpx: 300 }, { wpx: 100 }, { wpx: 130 }, { wpx: 150 }];
+            worksheet = XLSX.utils.json_to_sheet(excelData);
             const totalOrders = data.reduce((sum, item) => sum + Number(item.total_orders), 0);
             const totalProducts = data.reduce((sum, item) => sum + Number(item.total_products_sold), 0);
             const totalRev = data.reduce((sum, item) => sum + Number(item.total_revenue), 0);
-            worksheet = XLSX.utils.json_to_sheet(excelData);
             XLSX.utils.sheet_add_aoa(worksheet, [["TỔNG CỘNG TOÀN KỲ:", totalOrders, totalProducts, totalRev]], { origin: -1 });
             fileName = `BaoCao_DoanhThu_KhuVuc_${startDate}.xlsx`;
         }
@@ -327,10 +334,10 @@ export default function Reports() {
                 "Đang Nợ (Vỏ)": Number(item.remaining_bottles),
                 "Tiền Cọc (VNĐ)": Number(item.total_deposit)
             }));
-            columnWidths = [{ wpx: 150 }, { wpx: 100 }, { wpx: 200 }, { wpx: 80 }, { wpx: 80 }, { wpx: 100 }, { wpx: 120 }];
+            columnWidths = [{ wpx: 160 }, { wpx: 90 }, { wpx: 200 }, { wpx: 70 }, { wpx: 70 }, { wpx: 80 }, { wpx: 120 }];
+            worksheet = XLSX.utils.json_to_sheet(excelData);
             const totalBot = data.reduce((sum, item) => sum + Number(item.remaining_bottles), 0);
             const totalDep = data.reduce((sum, item) => sum + Number(item.total_deposit), 0);
-            worksheet = XLSX.utils.json_to_sheet(excelData);
             XLSX.utils.sheet_add_aoa(worksheet, [["TỔNG ĐANG NỢ:", "", "", "", "", totalBot, totalDep]], { origin: -1 });
             worksheet['!merges'] = [{ s: { r: data.length + 1, c: 0 }, e: { r: data.length + 1, c: 4 } }];
             fileName = `BaoCao_CongNo_VoBinh.xlsx`;
@@ -345,10 +352,10 @@ export default function Reports() {
                 "Số đơn": Number(item.total_orders),
                 "Tổng tiền": Number(item.total_revenue)
             }));
-            columnWidths = [{ wpx: 150 }, { wpx: 100 }, { wpx: 200 }, { wpx: 120 }, { wpx: 120 }, { wpx: 80 }, { wpx: 120 }];
+            columnWidths = [{ wpx: 160 }, { wpx: 90 }, { wpx: 180 }, { wpx: 80 }, { wpx: 90 }, { wpx: 60 }, { wpx: 120 }];
+            worksheet = XLSX.utils.json_to_sheet(excelData);
             const totalOrders = data.reduce((sum, item) => sum + Number(item.total_orders), 0);
             const totalMoney = data.reduce((sum, item) => sum + Number(item.total_revenue), 0);
-            worksheet = XLSX.utils.json_to_sheet(excelData);
             XLSX.utils.sheet_add_aoa(worksheet, [["TỔNG CỘNG:", "", "", "", "", totalOrders, totalMoney]], { origin: -1 });
             worksheet['!merges'] = [{ s: { r: data.length + 1, c: 0 }, e: { r: data.length + 1, c: 4 } }];
             fileName = `BaoCao_KhachHang_${startDate}.xlsx`;
@@ -362,9 +369,9 @@ export default function Reports() {
                 "Tiền Hoàn": Number(item.deposit_amount),
                 "Lý do": item.note || ""
             }));
-            columnWidths = [{ wpx: 100 }, { wpx: 150 }, { wpx: 150 }, { wpx: 80 }, { wpx: 120 }, { wpx: 200 }];
-            const totalRefund = data.reduce((sum, item) => sum + Number(item.deposit_amount), 0);
+            columnWidths = [{ wpx: 90 }, { wpx: 160 }, { wpx: 130 }, { wpx: 70 }, { wpx: 100 }, { wpx: 200 }];
             worksheet = XLSX.utils.json_to_sheet(excelData);
+            const totalRefund = data.reduce((sum, item) => sum + Number(item.deposit_amount), 0);
             XLSX.utils.sheet_add_aoa(worksheet, [["TỔNG TIỀN ĐÃ HOÀN:", "", "", "", totalRefund, ""]], { origin: -1 });
             worksheet['!merges'] = [{ s: { r: data.length + 1, c: 0 }, e: { r: data.length + 1, c: 3 } }];
             fileName = `BaoCao_KhauHao_VoBinhTuKhach_${startDate}.xlsx`;
@@ -376,10 +383,10 @@ export default function Reports() {
                 "Vỏ Khách Nợ": Number(item.bottles_with_customers),
                 "Tồn Kho": Number(item.current_stock)
             }));
-            columnWidths = [{ wpx: 200 }, { wpx: 120 }, { wpx: 120 }, { wpx: 120 }];
+            columnWidths = [{ wpx: 220 }, { wpx: 120 }, { wpx: 120 }, { wpx: 120 }];
+            worksheet = XLSX.utils.json_to_sheet(excelData);
             const totalDebt = data.reduce((sum, item) => sum + Number(item.bottles_with_customers), 0);
             const totalStock = data.reduce((sum, item) => sum + Number(item.current_stock), 0);
-            worksheet = XLSX.utils.json_to_sheet(excelData);
             XLSX.utils.sheet_add_aoa(worksheet, [["TỔNG CỘNG:", "", totalDebt, totalStock]], { origin: -1 });
             worksheet['!merges'] = [{ s: { r: data.length + 1, c: 0 }, e: { r: data.length + 1, c: 1 } }];
             fileName = `BaoCao_TonKho_SanPham.xlsx`;
@@ -389,9 +396,9 @@ export default function Reports() {
                 "Nguyên Vật Liệu": item.product_name,
                 "Tồn Kho Thực Tế": Number(item.current_stock)
             }));
-            columnWidths = [{ wpx: 250 }, { wpx: 150 }];
-            const totalStock = data.reduce((sum, item) => sum + Number(item.current_stock), 0);
+            columnWidths = [{ wpx: 300 }, { wpx: 150 }];
             worksheet = XLSX.utils.json_to_sheet(excelData);
+            const totalStock = data.reduce((sum, item) => sum + Number(item.current_stock), 0);
             XLSX.utils.sheet_add_aoa(worksheet, [["TỔNG CỘNG NGUYÊN VẬT LIỆU:", totalStock]], { origin: -1 });
             fileName = `BaoCao_TonKho_NVL.xlsx`;
         }
@@ -404,9 +411,9 @@ export default function Reports() {
                 "Số lượng Hao hụt": Number(item.wastage_qty),
                 "Tiền Thất Thoát (Ước tính)": Number(item.wastage_cost)
             }));
-            columnWidths = [{ wpx: 200 }, { wpx: 60 }, { wpx: 150 }, { wpx: 150 }, { wpx: 120 }, { wpx: 150 }];
-            const totalLoss = data.reduce((sum, item) => sum + Number(item.wastage_cost), 0);
+            columnWidths = [{ wpx: 220 }, { wpx: 60 }, { wpx: 130 }, { wpx: 130 }, { wpx: 110 }, { wpx: 150 }];
             worksheet = XLSX.utils.json_to_sheet(excelData);
+            const totalLoss = data.reduce((sum, item) => sum + Number(item.wastage_cost), 0);
             XLSX.utils.sheet_add_aoa(worksheet, [["TỔNG TIỀN THẤT THOÁT:", "", "", "", "", totalLoss]], { origin: -1 });
             worksheet['!merges'] = [{ s: { r: data.length + 1, c: 0 }, e: { r: data.length + 1, c: 4 } }];
             fileName = `BaoCao_HaoHut_SanXuat_${startDate}.xlsx`;
@@ -422,13 +429,13 @@ export default function Reports() {
                 "Phí Ship": Number(item.total_fee_amount),
                 "Tổng Thanh Toán": Number(item.total_payment)
             }));
-
-            columnWidths = [{ wpx: 100 }, { wpx: 80 }, { wpx: 200 }, { wpx: 120 }, { wpx: 120 }, { wpx: 120 }, { wpx: 120 }, { wpx: 150 }];
+            columnWidths = [{ wpx: 80 }, { wpx: 70 }, { wpx: 200 }, { wpx: 100 }, { wpx: 110 }, { wpx: 100 }, { wpx: 100 }, { wpx: 130 }];
+            printOrientation = 'landscape';
+            worksheet = XLSX.utils.json_to_sheet(excelData);
             const totalGoods = data.reduce((sum, item) => sum + Number(item.total_goods_amount || 0), 0);
             const totalVAT = data.reduce((sum, item) => sum + Number(item.vat_amount || 0), 0);
             const totalFee = data.reduce((sum, item) => sum + Number(item.total_fee_amount || 0), 0);
             const totalPayment = data.reduce((sum, item) => sum + Number(item.total_payment || 0), 0);
-            worksheet = XLSX.utils.json_to_sheet(excelData);
             XLSX.utils.sheet_add_aoa(worksheet, [["TỔNG CỘNG TOÀN KỲ:", "", "", "", totalGoods, totalVAT, totalFee, totalPayment]], { origin: -1 });
             worksheet['!merges'] = [{ s: { r: data.length + 1, c: 0 }, e: { r: data.length + 1, c: 3 } }];
             fileName = `BaoCao_NhapHang_VAT_${startDate}.xlsx`;
@@ -436,6 +443,59 @@ export default function Reports() {
 
         if (worksheet) {
             worksheet['!cols'] = columnWidths.map(w => ({ wpx: w.wpx }));
+
+            // 💡 CÀI ĐẶT TRANG IN TỰ ĐỘNG CHUẨN A4
+            worksheet['!pageSetup'] = {
+                paperSize: 9, // Giấy A4
+                orientation: printOrientation, // Tự động xoay (Ngang/Dọc) tùy báo cáo
+                fitToWidth: 1, // Ép vừa 1 trang bề ngang
+                fitToHeight: 0 // Chiều dọc tự do nhảy trang
+            };
+            // Căn lề giấy siêu mỏng để chữ hiện to nhất có thể
+            worksheet['!margins'] = { left: 0.1, right: 0.1, top: 0.3, bottom: 0.3, header: 0.1, footer: 0.1 };
+
+            // 💡 KẺ BẢNG VÀ TÔ MÀU
+            const range = XLSX.utils.decode_range(worksheet['!ref']);
+            for (let R = range.s.r; R <= range.e.r; ++R) {
+                for (let C = range.s.c; C <= range.e.c; ++C) {
+                    const cellAddress = { c: C, r: R };
+                    const cellRef = XLSX.utils.encode_cell(cellAddress);
+                    if (!worksheet[cellRef]) continue;
+
+                    // Kẻ viền (All Borders) và ngắt dòng (Wrap Text)
+                    worksheet[cellRef].s = {
+                        border: {
+                            top: { style: "thin", color: { rgb: "000000" } },
+                            bottom: { style: "thin", color: { rgb: "000000" } },
+                            left: { style: "thin", color: { rgb: "000000" } },
+                            right: { style: "thin", color: { rgb: "000000" } }
+                        },
+                        alignment: { vertical: "center", wrapText: true }
+                    };
+
+                    // Tiêu đề (Dòng đầu)
+                    if (R === 0) {
+                        worksheet[cellRef].s.font = { bold: true, color: { rgb: "FFFFFF" } };
+                        worksheet[cellRef].s.fill = { fgColor: { rgb: "0D6EFD" } };
+                        worksheet[cellRef].s.alignment.horizontal = "center";
+                    }
+                    // Tổng cộng (Dòng cuối)
+                    else if (R === range.e.r) {
+                        worksheet[cellRef].s.font = { bold: true, color: { rgb: "DC3545" } };
+                        worksheet[cellRef].s.fill = { fgColor: { rgb: "F8F9FA" } };
+                        if (typeof worksheet[cellRef].v === 'string') {
+                            worksheet[cellRef].s.alignment.horizontal = "right";
+                        }
+                    }
+                    // Dữ liệu giữa (Căn giữa các số ngắn)
+                    else {
+                        if (typeof worksheet[cellRef].v === 'number' && worksheet[cellRef].v < 100000) {
+                            worksheet[cellRef].s.alignment.horizontal = "center";
+                        }
+                    }
+                }
+            }
+
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, "BaoCao");
             XLSX.writeFile(workbook, fileName);
@@ -477,7 +537,18 @@ export default function Reports() {
             title = "SỔ CHI TIẾT BÁN HÀNG";
             tableCols = ["Ngày", "Mã HĐ", "Người giao", "Khách hàng", "SĐT", "Địa chỉ", "Hàng hóa", "SL", "Đơn giá", "Thành tiền", "Thế chân", "Tổng tiền"];
             tableRows = data.map(item => [
-                new Date(item.created_at).toLocaleDateString("vi-VN"), `HD${item.invoice_id}`, item.shipper_name || "", item.customer_name || "Khách lẻ", item.phone || "", item.customer_address || item.address || "", item.product_name, item.quantity, Number(item.sell_price).toLocaleString("vi-VN"), Number(item.thanh_tien).toLocaleString("vi-VN"), Number(item.the_chan).toLocaleString("vi-VN"), (Number(item.thanh_tien) + Number(item.the_chan)).toLocaleString("vi-VN")
+                new Date(item.created_at).toLocaleDateString("vi-VN"),
+                `HD${item.invoice_id}`,
+                item.shipper_name || "",
+                (item.customer_name || "Khách lẻ") + (item.note ? `\n(${item.note})` : ""), // 💡 Đã chèn thêm ghi chú rớt dòng
+                item.phone || "",
+                item.customer_address || item.address || "",
+                item.product_name,
+                item.quantity,
+                Number(item.sell_price).toLocaleString("vi-VN"),
+                Number(item.thanh_tien).toLocaleString("vi-VN"),
+                Number(item.the_chan).toLocaleString("vi-VN"),
+                (Number(item.thanh_tien) + Number(item.the_chan)).toLocaleString("vi-VN")
             ]);
             footData = [
                 { content: 'TỔNG CỘNG:', colSpan: 9, styles: { halign: 'right', fontStyle: 'bold' } },
@@ -491,7 +562,17 @@ export default function Reports() {
             title = "BÁO CÁO DOANH THU THỰC TẾ (DÒNG TIỀN & VỎ BÌNH)";
             tableCols = ["Ngày", "Mã HĐ", "Người giao", "Khách hàng", "Hàng hóa", "SL", "Cọc Giữ", "Tổng Tiền", "Thực Thu", "Nợ Tiền", "Nợ Vỏ"];
             tableRows = processedRevenueData.map(item => [
-                item.isFirst ? new Date(item.created_at).toLocaleDateString("vi-VN") : "", item.isFirst ? `HD${item.invoice_id}` : "", item.isFirst ? (item.shipper_name || "") : "", item.isFirst ? (item.customer_name || "Khách lẻ") : "", item.product_name, item.quantity, item.isFirst ? Number(item.inv_actual_deposit || 0).toLocaleString("vi-VN") : "", item.isFirst ? Number(item.inv_total || 0).toLocaleString("vi-VN") : "", item.isFirst ? Number(item.inv_paid || 0).toLocaleString("vi-VN") : "", item.isFirst ? Number(item.inv_debt || 0).toLocaleString("vi-VN") : "", item.isFirst ? (item.inv_actual_debt > 0 ? item.inv_actual_debt.toString() : "0") : ""
+                item.isFirst ? new Date(item.created_at).toLocaleDateString("vi-VN") : "",
+                item.isFirst ? `HD${item.invoice_id}` : "",
+                item.isFirst ? (item.shipper_name || "") : "",
+                item.isFirst ? ((item.customer_name || "Khách lẻ") + (item.note ? `\n(${item.note})` : "")) : "", // 💡 Đã chèn thêm ghi chú rớt dòng
+                item.product_name,
+                item.quantity,
+                item.isFirst ? Number(item.inv_actual_deposit || 0).toLocaleString("vi-VN") : "",
+                item.isFirst ? Number(item.inv_total || 0).toLocaleString("vi-VN") : "",
+                item.isFirst ? Number(item.inv_paid || 0).toLocaleString("vi-VN") : "",
+                item.isFirst ? Number(item.inv_debt || 0).toLocaleString("vi-VN") : "",
+                item.isFirst ? (item.inv_actual_debt > 0 ? item.inv_actual_debt.toString() : "0") : ""
             ]);
             footData = [
                 { content: 'TỔNG CỘNG TOÀN KỲ:', colSpan: 6, styles: { halign: 'right', fontStyle: 'bold' } },
@@ -576,7 +657,7 @@ export default function Reports() {
             subtitle = `Tính đến thời điểm hiện tại`;
             tableCols = ["Sản Phẩm", "Giá Bán", "Vỏ Khách Nợ", "Tồn Kho"];
             tableRows = data.map(item => [
-                item.product_name, Number(item.sell_price).toLocaleString("vi-VN") + " d", item.bottles_with_customers, `${item.current_stock} ${item.unit || ''}`.trim()
+                item.product_name, Number(item.sell_price).toLocaleString("vi-VN") + " d", item.bottles_with_customers, `${formatMoney(item.current_stock)} ${item.unit || ''}`.trim()
             ]);
             const totalDebt = data.reduce((sum, item) => sum + Number(item.bottles_with_customers), 0);
             const totalStock = data.reduce((sum, item) => sum + Number(item.current_stock), 0);
@@ -588,7 +669,7 @@ export default function Reports() {
             subtitle = `Tính đến thời điểm hiện tại`;
             tableCols = ["Nguyên Vật Liệu", "Tồn Kho Thực Tế"];
             tableRows = data.map(item => [
-                item.product_name, `${item.current_stock} ${item.unit || ''}`.trim()
+                item.product_name, `${formatMoney(item.current_stock)} ${item.unit || ''}`.trim()
             ]);
             const totalStock = data.reduce((sum, item) => sum + Number(item.current_stock), 0);
             footData = [{ content: 'TỔNG CỘNG:', colSpan: 1, styles: { halign: 'right', fontStyle: 'bold' } }, { content: totalStock.toString(), styles: { fontStyle: 'bold', textColor: [33, 37, 41], halign: 'center' } }];
@@ -1136,14 +1217,14 @@ export default function Reports() {
                                                         <td className="text-start fw-bold text-primary ps-4">{item.product_name}</td>
                                                         <td className="text-end text-muted">{formatMoney(item.sell_price)} đ</td>
                                                         <td className="fw-bold text-danger fs-5">{item.bottles_with_customers} <span className="small fw-normal text-muted">vỏ</span></td>
-                                                        <td className="fw-bold text-success fs-5 pe-4">{item.current_stock} <span className="small fw-normal text-muted">{item.unit || ''}</span></td>
+                                                        <td className="fw-bold text-success fs-5 pe-4">{formatMoney(item.current_stock)} <span className="small fw-normal text-muted">{item.unit || ''}</span></td>
                                                     </>
                                                 )}
 
                                                 {reportType === "inventory_materials" && (
                                                     <>
                                                         <td className="text-start fw-bold text-secondary ps-4">{item.product_name}</td>
-                                                        <td className="fw-bold text-dark fs-5 pe-4">{item.current_stock} <span className="small fw-normal text-muted">{item.unit || ''}</span></td>
+                                                        <td className="fw-bold text-dark fs-5 pe-4">{formatMoney(item.current_stock)} <span className="small fw-normal text-muted">{item.unit || ''}</span></td>
                                                     </>
                                                 )}
 

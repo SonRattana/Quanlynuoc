@@ -76,7 +76,7 @@ export default function Register() {
           <div className="text-center mb-4">
             <img src={logo} alt="Logo" style={{ width: "90px", marginBottom: "10px", mixBlendMode: "multiply" }} />
             <h3 className="fw-bold text-primary">TẠO TÀI KHOẢN</h3>
-            <p className="text-muted small">Cùng MitaFresh giải khát mùa hè!</p>
+            <p className="text-muted small">Cùng MitaFresh giải tỏa cơn khát!</p>
           </div>
 
          {/* MÀN HÌNH 1: ĐIỀN THÔNG TIN (ĐÃ XÓA Ô ĐỊA CHỈ) */}

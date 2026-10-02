@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react"; // 💡 Thêm useEffect vào đây
 import Layout from "../components/layout";
 import Toast from "../components/Toast";
 import api from "../src/utils/axios";
@@ -27,7 +27,38 @@ export default function MonthlyCosting() {
     const [toast, setToast] = useState(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const token = localStorage.getItem("token");
+    // 💡 TỰ ĐỘNG FETCH TIỀN HAO MÒN KHI SẾP CHỌN NGÀY
+    useEffect(() => {
+        const fetchAutoCosts = async () => {
+            if (!dateRange.start || !dateRange.end) return;
 
+            try {
+                // Gọi API vừa viết ở Bước 1
+                const response = await api.get(`api/production/auto-overhead-costs?startDate=${dateRange.start}&endDate=${dateRange.end}`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+
+                const autoCost = Math.round(response.data.total_depreciation);
+
+                // Nếu quét ra có tiền xuất vỏ hỏng, tự động format có dấu chấm và nhét vào ô input
+                if (autoCost > 0) {
+                    setCosts(prev => ({
+                        ...prev,
+                        total_depreciation: new Intl.NumberFormat("vi-VN").format(autoCost)
+                    }));
+                } else {
+                    // Nếu không có hao hụt, trả về trống để kế toán tự điền
+                    setCosts(prev => ({ ...prev, total_depreciation: "" }));
+                }
+            } catch (err) {
+                console.error("Không thể tự động lấy chi phí hao mòn", err);
+            }
+        };
+
+        // Kích hoạt hàm chạy ngầm
+        fetchAutoCosts();
+
+    }, [dateRange.start, dateRange.end]); // Mấu chốt: Cứ hễ ngày start hoặc end thay đổi là hàm tự chạy lại!
     // Refs để trigger click vào input date khi bấm vào icon
     const startDateRef = useRef(null);
     const endDateRef = useRef(null);

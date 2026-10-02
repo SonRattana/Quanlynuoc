@@ -12,7 +12,6 @@ function BomSetup() {
     const [selectedProductId, setSelectedProductId] = useState("");
     const [formula, setFormula] = useState([]);       // Mảng chứa công thức hiện tại
     const [isLoading, setIsLoading] = useState(false);
-
     const token = localStorage.getItem("token");
 
     // LẤY DANH SÁCH THÀNH PHẨM KHI MỞ TRANG
@@ -69,12 +68,22 @@ function BomSetup() {
 
                 // Lấy rổ chứa toàn bộ vật tư ra mà tự lọc
                 const smartFilteredMaterials = allMaterialsDb.filter(m => {
+                    // 💡 HÀNG RÀO BẢO VỆ CHUẨN XÁC DỰA VÀO ĐƠN VỊ TÍNH
+                    const isReturnableBottle = currentProd && ['bình', 'binh'].includes(currentProd.unit?.toLowerCase());
+
+                    if (isReturnableBottle) {
+                        const matName = String(m.name || "").toLowerCase();
+                        // Chặn đứng: Vỏ, Nhãn, và Nắp
+                        if (matName.includes("vỏ") || matName.includes("vo") ||
+                            matName.includes("nhãn") || matName.includes("nhan") ||
+                            matName.includes("nắp") || matName.includes("nap")) {
+                            return false;
+                        }
+                    }
+
                     const sg = String(m.size_group || "").toLowerCase();
-                    // Nếu là "Dùng chung" hoặc "Cụm nhỏ" (cum_nho)
                     if (sg === "chung" || sg === "cum_nho") return true;
-                    // Hoặc tên nhóm kích cỡ có chứa chữ 250ml
                     if (sg.includes(currentVol.toLowerCase())) return true;
-                    // Hoặc tên vật tư có chứa chữ 250ml
                     if (String(m.name).toLowerCase().includes(currentVol.toLowerCase())) return true;
                     return false;
                 });
@@ -124,7 +133,14 @@ function BomSetup() {
 
     // 💡 TÌM RA SẢN PHẨM ĐANG ĐƯỢC CHỌN VÀ NHẬN DIỆN ĐV TÍNH
     const selectedProduct = products.find(p => String(p.id) === String(selectedProductId));
-    const isPackOrBox = selectedProduct && ['loc', 'lốc', 'thùng', 'thung'].includes(selectedProduct.unit?.toLowerCase());
+    const isPackOrBox = selectedProduct && ['loc', 'lốc', 'LOC', 'LỐC', 'thùng', 'thung', 'THÙNG', 'THUNG', 'binh', 'bình', 'BINH', 'BÌNH',
+        'nap', 'nắp', 'NAP', 'NẮP', 'nhan', 'nhãn', 'NHAN', 'NHÃN'
+    ].includes(selectedProduct.unit?.toLowerCase());
+
+    // 👇 CHÈN THÊM ĐOẠN NÀY ĐỂ NHẬN DIỆN BÌNH 20L DỰA VÀO TÊN SẢN PHẨM 👇
+    const productName = selectedProduct ? (selectedProduct.name || "").toLowerCase() : "";
+    const is20LProduct = productName.includes("20l") || productName.includes("20 lít") || productName.includes("20 lit") || productName.includes("20L")
+        || productName.includes("20lít") || productName.includes("20 l") || productName.includes("20lit") || productName.includes("20 L");
 
     return (
         <Layout>
@@ -167,6 +183,27 @@ function BomSetup() {
                                     <div>
                                         <span className="fw-bold text-danger">⚠️ LƯU Ý QUAN TRỌNG:</span> Mặt hàng này tính bằng <strong>[{selectedProduct.unit.toUpperCase()}]</strong>.<br />
                                         Nhân viên nhập số lượng nắp/vỏ/nhãn... tiêu hao tương ứng để đúc ra <strong>1 {selectedProduct.unit}</strong> nhé (Ví dụ: 24, 12, hoặc 4). Đừng gõ nhầm số 1 là kho trừ sai ráng chịu!
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* 💡 ĐÃ FIX: CHỐT CHẶN CẢNH BÁO RIÊNG CHO BÌNH 20L/5L (Bao bì luân chuyển) */}
+                            {(selectedProduct.unit?.toLowerCase() === 'bình' || selectedProduct.unit?.toLowerCase() === 'binh') && (
+                                <div className="alert alert-info border-info border-2 shadow-sm d-flex align-items-center mb-4 p-3 rounded-3" role="alert">
+                                    <i className="fa fa-lightbulb fs-2 text-info me-3"></i>
+                                    <div className="mb-0 text-dark small">
+                                        Tuyệt đối <b className="text-danger">KHÔNG</b> đưa các nguyên vật liệu luân chuyển (Vỏ bình, Nhãn, Nắp,...) vào công thức này vì chúng được thu hồi VỎ, súc rửa và dùng lại liên tục. Chỉ thêm các nguyên vật liệu tiêu hao 100% (Màng co,...). <br />
+
+                                        <div className="mt-2 p-2 bg-white rounded border border-info border-opacity-50">
+                                            <span className="fw-bold text-primary"><i className="fa fa-question-circle me-1"></i> Vậy khi nào kho mới bị trừ Vỏ / Nhãn?</span>
+                                            <ul className="mb-1 mt-1 ps-3" style={{ listStyleType: "disc" }}>
+                                                <li>Vỏ bình cũ bị nứt, lủng, bẹp phải vứt đi ➡️ Lấy <b>vỏ mới</b> ra xài bù.</li>
+                                                <li>Nhãn cũ bị rách, tróc ➡️ Lấy <b>nhãn mới</b> dán thay thế.</li>
+                                                <li>Sản xuất lô nước bằng vỏ mới tinh lần đầu tiên.</li>
+                                            </ul>
+                                            <i className="text-danger fw-bold">👉 Cách làm:</i> <i>Khi xảy ra các vụ việc trên(Vỏ nứt, nhãn rách,...), thủ kho sang trang <b>Quản lý Kho</b> ➡️ <b>Phiếu Nhập/ Xuất/ Cấp Phát</b> ➡️ Dùng form <b>Điều Chuyển / Xuất Hủy</b>
+                                                để trừ đi số nguyên vật liệu (vỏ, nhãn, nắp, màn co,...) tương ứng.</i>
+                                        </div>
                                     </div>
                                 </div>
                             )}

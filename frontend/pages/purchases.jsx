@@ -348,7 +348,18 @@ export default function Purchases() {
                                                                     const numericString = String(e.target.value).replace(/[^0-9]/g, "");
                                                                     const newDetails = [...editModal.details];
                                                                     newDetails[idx].quantity_used = numericString === "" ? 0 : Number(numericString);
-                                                                    setEditModal({ ...editModal, details: newDetails });
+
+                                                                    // Tự động tính lại Tổng Tiền & VAT khi sửa Số lượng
+                                                                    const newTotalGoods = newDetails.reduce((sum, d) => sum + (d.quantity_used * d.unit_cost), 0);
+                                                                    const fee = Number(editModal.data.total_fee_amount) || 0;
+                                                                    const vatRate = Number(editModal.data.vat_rate) || 0;
+                                                                    const newVat = (newTotalGoods * vatRate) / 100;
+
+                                                                    setEditModal({
+                                                                        ...editModal,
+                                                                        details: newDetails,
+                                                                        data: { ...editModal.data, vat_amount: newVat, total_payment: newTotalGoods + fee + newVat }
+                                                                    });
                                                                 }}
                                                             />
                                                         </td>
@@ -361,7 +372,18 @@ export default function Purchases() {
                                                                     const numericString = String(e.target.value).replace(/[^0-9]/g, "");
                                                                     const newDetails = [...editModal.details];
                                                                     newDetails[idx].unit_cost = numericString === "" ? 0 : Number(numericString);
-                                                                    setEditModal({ ...editModal, details: newDetails });
+
+                                                                    // Tự động tính lại Tổng Tiền & VAT khi sửa Đơn giá
+                                                                    const newTotalGoods = newDetails.reduce((sum, d) => sum + (d.quantity_used * d.unit_cost), 0);
+                                                                    const fee = Number(editModal.data.total_fee_amount) || 0;
+                                                                    const vatRate = Number(editModal.data.vat_rate) || 0;
+                                                                    const newVat = (newTotalGoods * vatRate) / 100;
+
+                                                                    setEditModal({
+                                                                        ...editModal,
+                                                                        details: newDetails,
+                                                                        data: { ...editModal.data, vat_amount: newVat, total_payment: newTotalGoods + fee + newVat }
+                                                                    });
                                                                 }}
                                                             />
                                                         </td>
@@ -445,25 +467,49 @@ export default function Purchases() {
                                         </span>
                                     </div>
 
-                                    {/* Bảng xổ xuống thông minh */}
+                                    {/* Bảng xổ xuống thông minh (Đã nâng cấp Checkbox Multi-select) */}
                                     {filteredSearchProducts.length > 0 && (
-                                        <ul className="list-group position-absolute w-100 shadow-lg" style={{ zIndex: 1050, maxHeight: '250px', overflowY: 'auto', top: '100%', marginTop: '4px' }}>
-                                            {filteredSearchProducts.map(p => (
-                                                <li
-                                                    key={p.id}
-                                                    className="list-group-item list-group-item-action d-flex justify-content-between align-items-center border-bottom"
-                                                    style={{ cursor: 'pointer', padding: '10px 15px' }}
-                                                    // 💡 Dùng onMouseDown thay vì onClick để nó chạy trước khi sự kiện onBlur của thẻ input kích hoạt
-                                                    onMouseDown={() => {
-                                                        handleAddItem(p.id);
-                                                        setSearchProductTerm("");
-                                                        setFilteredSearchProducts([]);
-                                                    }}
-                                                >
-                                                    <div className="fw-bold text-dark">{p.name}</div>
-                                                    <span className="badge bg-secondary rounded-pill">{p.unit}</span>
-                                                </li>
-                                            ))}
+                                        <ul className="list-group position-absolute w-100 shadow-lg bg-white" style={{ zIndex: 1050, maxHeight: '250px', overflowY: 'auto', top: '100%', marginTop: '4px' }}>
+                                            {filteredSearchProducts.map(p => {
+                                                // 💡 Tự động kiểm tra xem món này đã có trong danh sách bên dưới chưa
+                                                const isSelected = items.some(i => i.product_id === p.id);
+
+                                                return (
+                                                    <li
+                                                        key={p.id}
+                                                        className={`list-group-item list-group-item-action d-flex align-items-center border-bottom ${isSelected ? 'bg-primary bg-opacity-10' : ''}`}
+                                                        style={{ cursor: 'pointer', padding: '10px 15px' }}
+                                                        // 💡 Dùng onMouseDown và preventDefault để NGĂN TRÌNH DUYỆT ĐÓNG BẢNG khi click
+                                                        onMouseDown={(e) => {
+                                                            e.preventDefault();
+
+                                                            if (isSelected) {
+                                                                // Bỏ tick -> Xóa khỏi danh sách
+                                                                handleRemoveItem(items.findIndex(i => i.product_id === p.id));
+                                                            } else {
+                                                                // Tick vào -> Thêm vào danh sách
+                                                                handleAddItem(p.id);
+                                                            }
+                                                        }}
+                                                    >
+                                                        {/* Ô Checkbox hiển thị trạng thái */}
+                                                        <div className="form-check mb-0 me-3">
+                                                            <input
+                                                                className="form-check-input border-primary"
+                                                                type="checkbox"
+                                                                checked={isSelected}
+                                                                readOnly
+                                                                style={{ cursor: 'pointer', transform: 'scale(1.3)' }}
+                                                            />
+                                                        </div>
+
+                                                        <div className={`fw-bold flex-grow-1 ${isSelected ? 'text-primary' : 'text-dark'}`}>
+                                                            {p.name}
+                                                        </div>
+                                                        <span className="badge bg-secondary rounded-pill">{p.unit}</span>
+                                                    </li>
+                                                );
+                                            })}
 
                                             {/* Cảnh báo khi gõ sai */}
                                             {searchProductTerm && filteredSearchProducts.length === 0 && (
@@ -516,6 +562,8 @@ export default function Purchases() {
 
                                 <div className="mb-3">
                                     <label className="form-label small fw-bold text-dark">Mã hóa đơn / Số chứng từ <span className="text-danger">*</span></label>
+                                    <br />
+                                    <span className="fw-bold text-danger"> Lưu ý: Nhập hàng bảo hành/đổi trả, vui lòng điền thêm BH- hoặc BB- trước mã hóa đơn (VD: BH-00123)</span>
                                     <input
                                         type="text"
                                         className="form-control border-secondary shadow-sm fw-bold text-primary"
@@ -523,7 +571,7 @@ export default function Purchases() {
                                         value={form.invoice_code}
                                         autoComplete="off" /* 💡 ĐÃ FIX: Chặn trình duyệt can thiệp */
                                         onChange={(e) => setForm({ ...form, invoice_code: e.target.value })}
-                                        required
+                                        require
                                     />
                                 </div>
 

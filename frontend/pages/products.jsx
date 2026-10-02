@@ -645,7 +645,22 @@ function Products() {
                                                     </div>
                                                 </div>
                                                 <div className="col-12 mt-3">
-                                                    <label className="form-label fw-bold">Thay ảnh mới</label>
+                                                    <label className="form-label fw-bold">Ảnh hiện tại / Thay ảnh mới</label>
+
+                                                    {/* 💡 ĐÃ FIX: Móc hình cũ lên, hoặc hiện preview hình mới vừa chọn */}
+                                                    <div className="mb-2">
+                                                        {editForm.image ? (
+                                                            <img
+                                                                src={typeof editForm.image === 'string' ? editForm.image : URL.createObjectURL(editForm.image)}
+                                                                alt="Preview"
+                                                                style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #ccc' }}
+                                                                onError={(e) => { e.target.src = "/no-image.png" }}
+                                                            />
+                                                        ) : (
+                                                            <img src="/no-image.png" alt="No Img" style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #ccc' }} />
+                                                        )}
+                                                    </div>
+
                                                     <input type="file" className="form-control" accept="image/*" onChange={(e) => setEditForm({ ...editForm, image: e.target.files[0] })} />
                                                 </div>
                                             </>
@@ -767,7 +782,16 @@ function Products() {
                                                     <React.Fragment key={`${p.id}-${index}`}>
                                                         <tr>
                                                             <td data-label="Ảnh">
-                                                                <img src={p.image ? p.image : "/no-image.png"} alt="Img" style={{ width: '45px', height: '45px', objectFit: 'cover', borderRadius: '5px', filter: showTrash ? 'grayscale(1)' : 'none' }} onError={(e) => { e.target.src = "/no-image.png" }} />
+                                                                <img
+                                                                    src={(p.image && p.image !== "null" && p.image !== "undefined") ? p.image : ""}
+                                                                    alt="Img"
+                                                                    style={{ width: '45px', height: '45px', objectFit: 'cover', borderRadius: '5px', filter: showTrash ? 'grayscale(1)' : 'none' }}
+                                                                    onError={(e) => {
+                                                                        e.currentTarget.onerror = null; // Chặn đứng vòng lặp
+                                                                        // 💡 ĐÃ FIX: Dùng mã ảnh base64 tạo ra một ô vuông xám có chữ "No Img". Không bao giờ lỗi!
+                                                                        e.currentTarget.src = "data:image/svg+xml;charset=utf-8,%3Csvg xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg' width%3D'45' height%3D'45' viewBox%3D'0 0 45 45'%3E%3Crect width%3D'45' height%3D'45' fill%3D'%23e9ecef'%2F%3E%3Ctext x%3D'50%25' y%3D'50%25' fill%3D'%236c757d' font-size%3D'10' font-family%3D'Arial, sans-serif' font-weight%3D'bold' text-anchor%3D'middle' dy%3D'.3em'%3ENo Img%3C%2Ftext%3E%3C%2Fsvg%3E";
+                                                                    }}
+                                                                />
                                                             </td>
                                                             <td data-label="Tên Sản Phẩm" className="fw-bold">{p.name} <div className="text-muted small">ID: {p.id}</div></td>
                                                             <td data-label="Dung tích">

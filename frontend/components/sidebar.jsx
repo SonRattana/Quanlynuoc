@@ -329,7 +329,7 @@ function Sidebar() {
                                         )}
 
                                         <a className={`menu-item ${isActive('/stock')}`} onClick={() => goTo('/stock')} style={{ cursor: 'pointer' }}>
-                                            <i className="fa fa-warehouse me-2"></i> Nhập/Xuất Kho
+                                            <i className="fa fa-warehouse me-2"></i> Quản lý Kho
                                         </a>
                                         <hr className="my-2 text-muted opacity-25" />
                                     </>
